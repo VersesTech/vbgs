@@ -1,1 +1,1 @@
-# vbgs
+# Variational Bayes Gaussian Splatting
