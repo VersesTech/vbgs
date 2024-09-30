@@ -157,8 +157,6 @@ def run_experiment(
     seed=123,
 ):
     def fit(key, img):
-        x = 3
-
         data = image_to_data(img)
         x, data_params = normalize_data(data)
 
