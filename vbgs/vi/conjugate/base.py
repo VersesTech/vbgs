@@ -132,7 +132,7 @@ class Conjugate(Distribution):
     @prior_params.setter
     def prior_params(self, value: ArrayDict):
         self._prior_params = value
-        self._update_cache()  # Jeff hack
+        self._update_cache()
 
     def expand(self, shape: tuple):
         """
@@ -377,9 +377,6 @@ class Conjugate(Distribution):
             beta (float): Batch decay for the update. Scalar value. Default is 0.0.
         """
 
-        # Need tree version of assert statement of the form:
-        #   assert(summed_stats[key].shape == self.posterior_params[key].shape for key in summed_stats.keys()
-        # or something like that unless that is unncecessary because apply_add takes care of it...
         scaled_updates = jtu.tree_map(lambda x: lr * x, summed_stats)
         scaled_prior = jtu.tree_map(
             lambda x: lr * (1.0 - beta) * x, self.prior_params
@@ -393,7 +390,6 @@ class Conjugate(Distribution):
 
         self.posterior_params = updated_posterior_params
 
-        # this will have keys corresponding to natural parameters of the likelihood (e.g. alpha, beta)
         self.likelihood.nat_params = self.map_params_to_likelihood(
             self.expected_likelihood_params()
         )
@@ -408,13 +404,8 @@ class Conjugate(Distribution):
         """
         Update distribution from probabilities
         """
-        distribution = (
-            data[0] if isinstance(data, tuple) else data
-        )  # Deal with the case where we have multiple inputs
+        distribution = data[0] if isinstance(data, tuple) else data
 
-        #       JEFF:  HACK TO GET JIT TO WORK
-        #        counts_shape = distribution.batch_shape
-        #        shape = counts_shape + (1,) * self.event_dim
         counts_shape = self.get_sample_shape(
             distribution.mean
         ) + self.get_batch_shape(distribution.mean)
@@ -423,7 +414,6 @@ class Conjugate(Distribution):
 
         # Adapted from the conjugate base class
         sample_dims = self.get_sample_dims(distribution.mean)
-        # list(range(len(counts_shape)))
 
         counts = jnp.ones(counts_shape)
         weights = (

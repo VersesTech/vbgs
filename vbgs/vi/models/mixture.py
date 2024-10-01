@@ -1,37 +1,13 @@
 from typing import Union, Optional, Tuple
 from jaxtyping import Array
 
-from jax import lax, jit, vmap
 from jax.tree_util import tree_map
 import jax.numpy as jnp
-from jax.nn import softmax
-from jax.scipy.special import logsumexp
-from functools import partial
 
 from vbgs.vi.conjugate.base import Conjugate
 from vbgs.vi.distribution import Distribution
 from vbgs.vi.models.base import Model
-from vbgs.vi.utils import assign_unused, ArrayDict
-
-# This version eliminates the idiosyncratic use batch and event shapes that were creating some confusion
-# The rules that govern the shape are now:
-# likelihood.batch_shape = prior.batch_shape + prior.event_shape
-# self.batch_shape = prior_batch_shape
-# self.event_shape = likelhood.event_shape
-#
-# Using this convention, the mixture model will expect as data an object of the form
-#     data.shape = sample_shape + self.batch_shape + self.event_shape
-#                = sample_shape + prior.batch_shape + likelhood.event_shape
-#
-# This creates a new problem.  specifically, the log probabilities are computed from
-# the likelihood.expected_log_likelihood(x) function which expects x to be of the form
-#
-#     x.shape = sample_shape + likelhood.batch_shape + likelhood.event_shape
-#             = sample_shape + prior.batch_shape + prior.event_shape + likelhood.event_shape
-#
-# So on input the shape of data is missing the contribution from prior.event_shape.  We fix this
-# (and probably break jitting) by expanding data to the correct shape before passing it to the
-# expected_log_likelihood function.
+from vbgs.vi.utils import ArrayDict
 
 
 class Mixture(Model):
@@ -83,167 +59,6 @@ class Mixture(Model):
         for i in self.batch_shape_prior:
             flattened_batch_shape *= i
         self.flattened_batch_shape = (flattened_batch_shape,)
-
-    def update_from_data(
-        self,
-        data: Union[Array, tuple],
-        iters: int = 1,
-        assign_unused: bool = False,
-    ) -> tuple[Array, Array]:
-        # expand data to a shape consistent with the likelihood by inserting singleton dimemsions for the mixture component
-        data = self.expand_to_categorical_dims(data)
-        likelihood, prior, elbo = self._update_from_data(
-            data,
-            self.likelihood,
-            self.prior,
-            iters=iters,
-            assign_unused=assign_unused,
-        )
-        mix_dims = tuple(range(-self.prior.event_dim, 0))
-        posterior = softmax(
-            likelihood.expected_log_likelihood(data) + prior.log_mean(),
-            mix_dims,
-        )
-        self.likelihood, self.prior = likelihood, prior
-        return posterior, elbo
-
-    @partial(jit, static_argnames=["iters", "assign_unused"])
-    def _update_from_data(
-        self,
-        data: Union[Array, tuple],
-        likelihood: Conjugate,
-        prior: Conjugate,
-        iters: int = 1,
-        assign_unused: bool = False,
-    ):
-        # sample_dims = tuple(range(len(data[0].shape) - self.batch_dim - self.prior.event_dim - self.likelihood.event_dim))
-        sample_dims = self.get_sample_dims(data)
-        mix_dims = tuple(range(-self.prior.event_dim, 0))
-
-        def step_fn(carry, _):
-            likelihood, prior = carry
-
-            """ E step """
-            log_probs = (
-                likelihood.expected_log_likelihood(data) + prior.log_mean()
-            )
-            posterior = softmax(log_probs, mix_dims)
-
-            """ Compute ELBO """
-            elbo_contrib = logsumexp(log_probs, mix_dims)
-            elbo = (
-                elbo_contrib.sum(sample_dims)
-                - self.likelihood.kl_divergence().sum(mix_dims)
-                - self.prior.kl_divergence()
-            )
-            """ M step """
-            # temp = self._to_stats(posterior, sample_dim)
-
-            if assign_unused:
-                posterior = self.assign_unused(
-                    elbo_contrib, posterior, **self.assign_unused_opts
-                )
-
-            prior.update_from_statistics(
-                self._to_stats(posterior, sample_dims), **self.pi_opts
-            )
-            likelihood.update_from_data(
-                data, posterior, **self.likelihood_opts
-            )
-
-            return (likelihood, prior), elbo
-
-        init_distributions = (likelihood, prior)
-        (likelihood, prior), elbo = lax.scan(
-            step_fn, init_distributions, jnp.arange(iters)
-        )
-        return likelihood, prior, elbo
-
-    def update_from_probabilities(
-        self, inputs: Distribution, iters: int = 1, assign_unused: bool = False
-    ) -> tuple[Array, Array]:
-        inputs = self.expand_to_categorical_dims_for_probs(inputs)
-        likelihood, prior, elbo = self._update_from_probabilities(
-            inputs,
-            self.likelihood,
-            self.prior,
-            iters=iters,
-            assign_unused=assign_unused,
-        )
-        mix_dims = tuple(range(-self.prior.event_dim, 0))
-        posterior = softmax(
-            likelihood.average_energy(inputs) + prior.log_mean(), mix_dims
-        )
-        self.likelihood, self.prior = likelihood, prior
-        return posterior, elbo
-
-    @partial(jit, static_argnames=["iters", "assign_unused"])
-    def _update_from_probabilities(
-        self,
-        inputs: Distribution,
-        likelihood: Conjugate,
-        prior: Conjugate,
-        iters: int = 1,
-        assign_unused: bool = False,
-    ):
-        sample_dims = self.get_sample_dims(inputs)
-        mix_dims = tuple(range(-self.prior.event_dim, 0))
-
-        def step_fn(carry, _):
-            likelihood, prior = carry
-
-            """ E step """
-            log_probs = likelihood.average_energy(inputs) + prior.log_mean()
-            elbo_contrib = logsumexp(log_probs, mix_dims)
-            elbo = (
-                elbo_contrib.sum(sample_dims)
-                - self.likelihood.kl_divergence().sum(mix_dims)
-                - self.prior.kl_divergence()
-            )
-            posterior = softmax(log_probs, mix_dims)
-            if assign_unused:
-                posterior = self.assign_unused(
-                    elbo_contrib, posterior, **self.assign_unused_opts
-                )
-
-            """ M step """
-            prior.update_from_statistics(
-                self._to_stats(posterior, sample_dims), **self.pi_opts
-            )
-            likelihood.update_from_probabilities(
-                inputs, posterior, **self.likelihood_opts
-            )
-
-            return (likelihood, prior), elbo
-
-        init_distributions = (likelihood, prior)
-        (likelihood, prior), elbo = lax.scan(
-            step_fn, init_distributions, jnp.arange(iters)
-        )
-        return likelihood, prior, elbo
-
-    def assign_unused(
-        self,
-        elbo_contrib: Array,
-        assignments: Array,
-        d_alpha_thr: float = 1.0,
-        fill_value: float = 1.0,
-    ) -> Array:
-        assignments_r = assignments.reshape(
-            (-1,) + self.flattened_batch_shape + self.event_shape_prior
-        )
-        d_alpha_r = (self.prior.alpha - self.prior.prior_alpha).reshape(
-            self.flattened_batch_shape + self.event_shape_prior
-        )
-        elbo_contrib_r = elbo_contrib.reshape(
-            (-1,) + self.flattened_batch_shape
-        )
-        assignments_reass = vmap(assign_unused, in_axes=(1, 0, 1), out_axes=1)(
-            assignments_r, d_alpha_r, elbo_contrib_r
-        )
-        return assignments_reass.reshape(
-            (-1,) + self.batch_shape_prior + self.event_shape_prior
-        )
 
     def get_sample_dims(self, data):
         if type(data) is tuple:
@@ -297,62 +112,7 @@ class Mixture(Model):
             expanded_inputs = inputs.expand_batch_shape(mix_dims)
         return expanded_inputs
 
-    def elbo(self, data: Array) -> Array:
-        data = self.expand_to_categorical_dims(data)
-        sample_dims = tuple(
-            range(
-                len(data.shape)
-                - self.batch_dim
-                - self.prior.event_dim
-                - self.likelihood.event_dim
-            )
-        )
-        mix_dims = tuple(range(-self.prior.event_dim, 0))
-        log_probs = (
-            self.likelihood.expected_log_likelihood(data)
-            + self.prior.log_mean()
-        )
-        log_z = logsumexp(log_probs, mix_dims)
-        return (
-            jnp.sum(log_z, sample_dims)
-            - self.likelihood.kl_divergence().sum(mix_dims)
-            - self.prior.kl_divergence()
-        )
-
     def _to_stats(self, posterior: Array, sample_dims: int) -> ArrayDict:
         return ArrayDict(
             eta=ArrayDict(eta_1=posterior.sum(sample_dims)), nu=None
         )
-
-    def get_assignments_from_data(self, data: Union[Array, Tuple]) -> Array:
-        data = self.expand_to_categorical_dims(data)
-        return softmax(
-            self.likelihood.expected_log_likelihood(data)
-            + self.prior.log_mean(),
-            list(range(-self.prior.event_dim, 0)),
-        )
-
-    def get_assignments_from_probabilities(
-        self, inputs: Union[Distribution, Tuple[Distribution]]
-    ) -> Array:
-        inputs = self.expand_to_categorical_dims_for_probs(inputs)
-        return softmax(
-            self.likelihood.average_energy(inputs) + self.prior.log_mean(),
-            list(range(-self.prior.event_dim, 0)),
-        )
-
-    def predict(self, X):
-        pY = self.likelihood.predict(X)
-        Res = pY.residual
-        log_p = Res + self.prior.log_mean()
-
-        log_p = log_p - jnp.max(log_p, axis=-1, keepdims=True)[0]
-
-        p = jnp.exp(log_p)
-        p = p / jnp.sum(p, axis=-1, keepdims=True)
-
-        p = jnp.expand_dims(jnp.expand_dims(p, -1), -1)
-        Sigma = ((pY.sigma + pY.mean @ pY.mean.swapaxes(-2, -1)) * p).sum(-3)
-        mu = (pY.mean * p).sum(-3)
-        Sigma = Sigma - mu @ mu.swapaxes(-2, -1)
-        return mu, Sigma, p.squeeze(-1).squeeze(-1)

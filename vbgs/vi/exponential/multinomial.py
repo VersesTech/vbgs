@@ -241,15 +241,3 @@ class Multinomial(ExponentialFamily):
         return self.__class__(
             nat_params=nat_params_combined, residual=summed_residual
         )
-
-    # def params_from_statistics(self, stats: ArrayDict) -> ArrayDict:
-    #     """
-    #     Computes the inverse of `expected_statistics` \theta = mu^{-1}(<T(x)>) using self._expectations
-    #     """
-    #     return ArrayDict(logits=jnp.log(stats.x / neg_log_residual))
-
-    # def sample(self, key, shape=()) -> Array:
-    #     """
-    #     Samples from the distribution given \theta
-    #     """
-    #     return jr.multinomial(key, self.mean, shape=shape)

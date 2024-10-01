@@ -370,8 +370,6 @@ class MultivariateNormal(ExponentialFamily):
             setattr(self, f"_{attr_name}", method())
 
     def shift(self, deltax):
-        # This shameful hack shifts the mean of the distribution and returns a new distribution with the shifted mean
-        # jeff needed it to get a the dumb version of attention working for atari
         inv_sigma_mu = self.inv_sigma_mu + self.inv_sigma @ deltax
         inv_sigma = self.inv_sigma
         residual = self.residual

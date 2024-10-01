@@ -42,25 +42,6 @@ def inv_and_logdet(
     return logdet
 
 
-# @partial(jit, static_argnames=['return_inverse'])
-# def inv_and_logdet(
-#     pos_def_matrix,
-#     return_inverse = True
-#     ):
-#     """compute log-determinant of a positive definite matrix and
-#     compute an matrix inverse using cholesky decomposition.
-#     """
-#     shape = pos_def_matrix.shape
-#     lu = linalg.lu_factor(pos_def_matrix)
-#     logdet = jnp.expand_dims(jnp.log(jnp.abs(jnp.diagonal(lu[0], axis1=-1, axis2=-2))).sum(-1), (-1, -2))
-#     if return_inverse:
-#         identity = jnp.broadcast_to(jnp.eye(shape[-1]), shape)
-#         matrix_inverse = linalg.lu_solve(lu, identity)
-#         return matrix_inverse, logdet
-
-#     return logdet
-
-
 def bdot(x, y):
     """Batched dot product using vmap"""
     assert x.ndim > 1

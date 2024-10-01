@@ -296,23 +296,6 @@ class Multinomial(Conjugate):
             / (alpha_sum**2 * (alpha_sum + 1))
         )
 
-    # def entropy(self) -> Array:
-    #     """
-    #     The entropy of the distribution.
-
-    #     Returns:
-    #         Array (batch_shape)
-    #             The entropy of the distribution
-    #     """
-    #     k = self.alpha.shape[-1]
-    #     alpha_sum = self.sum_events(self.alpha)
-    #     return (
-    #         self.sum_events(lgamma(self.alpha))
-    #         - lgamma(alpha_sum)
-    #         - (k - alpha_sum) * jsp.digamma(alpha_sum)
-    #         - self.sum_events((self.alpha - 1.0) * jsp.digamma(self.alpha))
-    #     )
-
     def sample(self, key, shape=()) -> Array:
         """
         Draw random samples from the distribution.

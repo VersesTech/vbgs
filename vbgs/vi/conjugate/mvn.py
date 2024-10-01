@@ -162,7 +162,7 @@ class MultivariateNormal(Conjugate):
         n = jnp.full(
             batch_shape + event_shape[:-default_event_dim] + (1, 1),
             1.0 + dim + dof_offset,
-        )  # NOTE: defining n = 1.0 + dim means expected_sigma() is undefined. In the past, Jeff has used dof_offset=1.0 to resolve this if expected_sigma is needed
+        )
         return ArrayDict(mean=mean, kappa=kappa, u=u, n=n)
 
     @property
@@ -341,7 +341,6 @@ class MultivariateNormal(Conjugate):
     ) -> Array:
         half_dim = 0.5 * self.dim
         term_1 = -half_dim * jnp.log(kappa)
-        # by negating this term, we make it equal to logdet_u, because log |A⁻¹| = -log |A|
         term_2 = -0.5 * n * logdet_inv_u
         term_3 = half_dim * (jnp.log(2 * jnp.pi) + n * jnp.log(2))
         term_4 = mvgammaln(n / 2.0, self.dim)
@@ -358,9 +357,6 @@ class MultivariateNormal(Conjugate):
         return -self.logdet_inv_u + self.dim * jnp.log(self.n)
 
     def variational_residual(self):
-        # return 0.5 * (
-        #     -self.dim * jnp.log(2 * jnp.pi) + self.expected_logdet_inv_sigma() - self.expected_mu_inv_sigma_mu()
-        # ).squeeze((-2, -1))
         return 0.5 * (
             self.dim * (jnp.log(2) - jnp.log(self.n) - 1.0 / self.kappa)
             + mvdigamma(self.n / 2.0, self.dim)
