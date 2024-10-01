@@ -1,4 +1,20 @@
-import numpy as np 
+# Copyright 2024 XXXXXX.
+#
+# Licensed under the XXXXXX Academic Research License (the “License”);
+# you may not use this file except in compliance with the license.
+#
+# You may obtain a copy of the License at
+#
+#     main/LICENSE.txt
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+import numpy as np
 
 import jax
 import jax.numpy as jnp
@@ -6,10 +22,12 @@ from jax.scipy.stats import multivariate_normal as mvn
 
 from functools import partial
 
+
 @jax.jit
 def select(uv, mean, radii):
     dist = jnp.linalg.norm(mean - uv)
     return dist < radii
+
 
 def select_gaussians(mean, covariance, alpha, patch_center, patch_radius):
     # Basically filters out the Gaussians that are not in the patch
@@ -21,6 +39,7 @@ def select_gaussians(mean, covariance, alpha, patch_center, patch_radius):
     )
     s = s.astype(jnp.bool_)
     return mean[s], covariance[s], alpha[s]
+
 
 @jax.jit
 def render_patch(uv, mean, covariance, alpha):
