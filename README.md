@@ -22,7 +22,7 @@ The image experiments pull the imagenet dataset using [Huggingface datasets](htt
 
 For the 3D objects, the Blender dataset can be downloaded using [nerfstudio](https://docs.nerf.studio/quickstart/existing_dataset.html) and set the path accordingly in `scripts/config/blender.yaml`. 
 
-For the 3D rooms, the Habitat test scenes can be downloaded and rendered using the [Dust3r data preprocessing pipeline](https://github.com/naver/dust3r/tree/main/datasets_preprocess/habitat).
+For the 3D rooms, the Habitat test scenes can be downloaded and rendered using the [Dust3r data preprocessing pipeline](https://github.com/naver/dust3r/tree/main/datasets_preprocess/habitat). Set the path accordingly in `scripts/config/habitat.yaml`.
 
 ## Model Training  
 
