@@ -43,7 +43,7 @@ python scripts/train_image_continual.py
 
 ### Object Experiments
 
-Code for constructing the model for 3D data can be found in `scripts/model_volume.py`. Rendering of an object be done using the `scripts/render_volume.ipynb` notebook.
+Code for constructing the model for 3D data can be found in `scripts/model_volume.py`. Rendering of an object can be done using the `scripts/render_volume.ipynb` notebook.
 
 Running the Blender objects benchmark and continual benchmark. This script stores the model after integrating each frame (continual) and at the end (full). 
 ```
@@ -52,7 +52,8 @@ python scripts/train_objects.py
 
 ### Room Experiments
 
-Running the Habitat benchmark and continual benchmark is similar to the object case. This script stores the model after integrating each frame (continual) and at the end (full). 
+
+Running the Habitat benchmark and continual benchmark is similar to the object case. This script stores the model after integrating each frame (continual) and at the end (full). Rendering of a room can be done using the `scripts/render_volume.ipynb` notebook.
 ```
 python scripts/train_rooms.py
 ```
