@@ -12,6 +12,7 @@ dependencies = [
     "jaxtyping>=0.2.34",
     "matplotlib>=3.9.2",
     "multimethod>=1.12",
+    "opencv-python>=4.10.0.84",
     "pillow>=10.4.0",
     "rich>=13.8.1",
     "ruff>=0.6.8",
@@ -23,6 +24,10 @@ gpu = [
     'jax[cuda12]>=0.3.4',
     'jaxlib[cuda12]>=0.3.4',
 ]
+
+[tool.setuptools]
+py-modules = ["vbgs"]
+
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.

@@ -18,10 +18,10 @@ from vbgs.model.utils import random_mean_init
 from vbgs.model.train import fit_delta_gmm_step
 from vbgs.data.utils import create_normalizing_params, normalize_data
 from vbgs.data.image import to_patches, image_to_data
-from vbgs.render import render_img
+from vbgs.render.image import render_img
 from vbgs.metrics import calc_mse, calc_psnr
 
-from image_model import get_image_model
+from model_image import get_image_model
 
 
 def fit_continual(image_patches, img, n_components, key=None):

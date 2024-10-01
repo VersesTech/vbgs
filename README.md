@@ -16,6 +16,13 @@ pip install -e .[gpu]
 
 Note: There is a dependency conflict between the torch cuda version and the jax cuda version. To use the renderer from the [Gaussian Splatting repository](https://github.com/graphdeco-inria/gaussian-splatting), please create a separate virtual environment and install this as instructed. Then install the `cpu` version of this repository and run the scripts for rendering within this environment. 
 
+## Getting the Data 
+
+The image experiments pull the imagenet dataset using [Huggingface datasets](https://huggingface.co/docs/datasets/en/index) directly in the train script. 
+
+For the 3D objects, the Blender dataset can be downloaded using [nerfstudio](https://docs.nerf.studio/quickstart/existing_dataset.html) and set the path accordingly in `scripts/config/blender.yaml`. 
+
+
 ## Model Training  
 
 The scripts for training can be found in the `scripts` folder. [Hydra](hydra.cc) is used for configuring the parameters, and each script has an accompanying config file in `scripts/configs`. 
@@ -35,4 +42,11 @@ python scripts/train_image_continual.py
 
 ### Object Experiments
 
-Code for constructing the model for 3D data can be found in `scripts/model_volume.py`.
+Code for constructing the model for 3D data can be found in `scripts/model_volume.py`. Rendering of an object be done using the `scripts/render_volume.ipynb` notebook.
+
+Running the Blender objects benchmark and continual benchmark. This script stores the model after integrating each frame (continual) and at the end (full). 
+```
+python scripts/train_objects.py
+```
+
+### Room Experiments

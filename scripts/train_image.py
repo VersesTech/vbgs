@@ -21,9 +21,9 @@ from vbgs.data.image import image_to_data
 from vbgs.data.utils import normalize_data
 from vbgs.model.train import fit_gmm
 from vbgs.metrics import calc_mse, calc_psnr
-from vbgs.render import render_img
+from vbgs.render.image import render_img
 
-from .image_utils import get_image_model
+from model_image import get_image_model
 
 
 resources_path = Path(vbgs.__file__).parent.parent / "resources"

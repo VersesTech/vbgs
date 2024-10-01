@@ -79,7 +79,7 @@ def compute_elbo_delta(model, data):
     """
     Computes the ELBO for the provided data.
     Note: if the data is too large to process, you want to batch around this
-          function (see `fit_delta_gmm_step`)
+          function (see `fit_gmm_step`)
 
     :param model : Mixture model instance which represents the joint
                    distribution of space, color and the latent z
@@ -114,7 +114,7 @@ def compute_elbo_delta(model, data):
     return elbo, posteriors
 
 
-def fit_delta_gmm_step(
+def fit_gmm_step(
     initial_model,
     model,
     data,
