@@ -18,7 +18,7 @@ pip install -e .[gpu]
 
 There is a dependency conflict between the torch cuda version and the jax cuda version. For this reason, we use a different virtual environment to run the cuda-based Gaussian splatting renderer which uses the GPU enabled rendering, and a cpu version of `vbgs`.
 
-To use the renderer from the [Gaussian Splatting repository](https://github.com/graphdeco-inria/gaussian-splatting). Please create a new virtual environment and clone this repository at the same parent location as `vbgs`. Install the gaussian-splatting submodules (`simple-knn`, `diff-gaussian-rasterization`) in this new virtula environment by running `python setup.py install`. Now you can install the **`cpu`**! version of `vbgs` within this environment. 
+To use the renderer from the [Gaussian Splatting repository](https://github.com/graphdeco-inria/gaussian-splatting). Please create a new virtual environment and clone this repository at the same parent location as `vbgs`. Install the gaussian-splatting submodules (`simple-knn`, `diff-gaussian-rasterization`) in this new virtula environment by running `python setup.py install`. Now you can install the **`cpu`** version of `vbgs` within this environment. 
 
 ## Downloading the Data 
 
@@ -26,7 +26,7 @@ The image experiments pull the imagenet dataset using [Huggingface datasets](htt
 
 For the 3D objects, the Blender dataset can be downloaded using [nerfstudio](https://docs.nerf.studio/quickstart/existing_dataset.html) and set the path accordingly in `scripts/config/blender.yaml`. 
 
-For the 3D rooms, the Habitat test scenes can be downloaded and rendered using the [Dust3r data preprocessing pipeline](https://github.com/naver/dust3r/tree/main/datasets_preprocess/habitat). Set the path accordingly in `scripts/config/habitat.yaml`.
+For the 3D rooms, the Habitat test scenes can be downloaded and rendered using the [Dust3r data preprocessing pipeline](https://github.com/naver/dust3r/tree/main/datasets_preprocess/habitat). Set the path accordingly in `scripts/config/habitat.yaml`. `scripts/habitat_to_blender.py` contains code to transform this dataset into the Blender format.
 
 ## Model Training  
 
