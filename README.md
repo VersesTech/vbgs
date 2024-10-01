@@ -14,7 +14,9 @@ For the GPU version with cuda run:
 pip install -e .[gpu]
 ```
 
-Note: There is a dependency conflict between the torch cuda version and the jax cuda version. To use the renderer from the [Gaussian Splatting repository](https://github.com/graphdeco-inria/gaussian-splatting), please create a separate virtual environment and install this as instructed. Then install the `cpu` version of this repository and run the scripts for rendering within this environment. 
+Note: There is a dependency conflict between the torch cuda version and the jax cuda version. To use the renderer from the [Gaussian Splatting repository](https://github.com/graphdeco-inria/gaussian-splatting), please create a separate virtual environment and install this as instructed there. Then install the `cpu` version of this repository and run the scripts for rendering within this environment. Currently this repository requires `gaussian-splatting` to be cloned in the same parent folder as `vbgs`. In case it is installed somewhere else, please adapt `vbgs.render.volume.py` to point to the correct location. 
+
+Note: Currently the repository
 
 ## Getting the Data 
 
