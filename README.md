@@ -14,11 +14,13 @@ For the GPU version with cuda run:
 pip install -e .[gpu]
 ```
 
-Note: There is a dependency conflict between the torch cuda version and the jax cuda version. To use the renderer from the [Gaussian Splatting repository](https://github.com/graphdeco-inria/gaussian-splatting), please create a separate virtual environment and install this as instructed there. Then install the `cpu` version of this repository and run the scripts for rendering within this environment. Currently this repository requires `gaussian-splatting` to be cloned in the same parent folder as `vbgs`. In case it is installed somewhere else, please adapt `vbgs.render.volume.py` to point to the correct location. 
+### Installation of the render environment
 
-Note: Currently the repository
+There is a dependency conflict between the torch cuda version and the jax cuda version. For this reason, we use a different virtual environment to run the cuda-based Gaussian splatting renderer which uses the GPU enabled rendering, and a cpu version of `vbgs`.
 
-## Getting the Data 
+To use the renderer from the [Gaussian Splatting repository](https://github.com/graphdeco-inria/gaussian-splatting). Please create a new virtual environment and clone this repository at the same parent location as `vbgs`. Install the gaussian-splatting submodules (`simple-knn`, `diff-gaussian-rasterization`) in this new virtula environment by running `python setup.py install`. Now you can install the **`cpu`**! version of `vbgs` within this environment. 
+
+## Downloading the Data 
 
 The image experiments pull the imagenet dataset using [Huggingface datasets](https://huggingface.co/docs/datasets/en/index) directly in the train script. 
 
@@ -45,7 +47,7 @@ python scripts/train_image_continual.py
 
 ### Object Experiments
 
-Code for constructing the model for 3D data can be found in `scripts/model_volume.py`. Rendering of an object can be done using the `scripts/render_volume.ipynb` notebook.
+Code for constructing the model for 3D data can be found in `scripts/model_volume.py`. Rendering of an object can be done using the `scripts/render_volume.ipynb` notebook in the render virtual environment.
 
 Running the Blender objects benchmark and continual benchmark. This script stores the model after integrating each frame (continual) and at the end (full). 
 ```
@@ -55,7 +57,8 @@ python scripts/train_objects.py
 ### Room Experiments
 
 
-Running the Habitat benchmark and continual benchmark is similar to the object case. This script stores the model after integrating each frame (continual) and at the end (full). Rendering of a room can be done using the `scripts/render_volume.ipynb` notebook.
+Running the Habitat benchmark and continual benchmark is similar to the object case. This script stores the model after integrating each frame (continual) and at the end (full). Rendering of a room can be done using the `scripts/render_volume.ipynb` notebook in the render virtual environment.
+.
 ```
 python scripts/train_rooms.py
 ```
