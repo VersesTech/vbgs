@@ -51,3 +51,9 @@ python scripts/train_objects.py
 ```
 
 ### Room Experiments
+
+Running the Habitat benchmark and continual benchmark is similar to the object case. This script stores the model after integrating each frame (continual) and at the end (full). 
+```
+python scripts/train_rooms.py
+```
+
