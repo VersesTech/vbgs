@@ -1,0 +1,22 @@
+seed: 0
+experiment_name: benchmark-imagenet 
+model:
+  n_components: 2000
+  init_random: True
+  dof: 1.0
+  scale: null
+  color_scale: null 
+  position_scale: null
+train:
+  batch_size: 25120
+  learning_rate: 1.0
+  beta: 0.0
+  n_iters: 1
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: data/${experiment_name}/init_random:${model.init_random}/scale:${model.scale}_cs:${model.color_scale}/components:${model.n_components}_dof:${model.dof}/lr:${train.learning_rate}_iters:${train.n_iters}
+  sweep:
+    dir: data/sweep/${run.dir}
+    subdir: ""

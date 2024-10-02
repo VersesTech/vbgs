@@ -1,0 +1,31 @@
+seed: 0
+device: 0
+experiment_name: rooms
+model: 
+  n_components: 100_000
+  init_random: True
+  dof: 1
+  scale: ${model.n_components}
+  use_reassign: True
+  reassign_fraction: 0.05
+data: 
+  model_name: van-gogh-room
+  data_path: /home/shared/habitat_processed/habitat-test-scenes/${data.model_name}/
+  data_index: ""
+  subsample_factor: null
+  shuffle: True
+  n_frames: 200
+train: 
+  batch_size: 500
+  learning_rate: 1.0
+  beta: 0.0
+  n_iters: 1
+dirname: ${experiment_name}/${data.model_name}_shuffle:${data.shuffle}/nc:${model.n_components}/randinit:${model.init_random}_reassign:${model.use_reassign}
+hydra: 
+  job: 
+    chdir: True
+  run: 
+    dir: data/${dirname}
+  sweep: 
+    dir: data/sweep/${dirname}
+    subdir: ""
