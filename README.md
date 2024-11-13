@@ -5,21 +5,23 @@ This repository contains code accompanying the paper [Variational Bayes Gaussian
 
 ## Installation 
 
-The package for optimizing VBGS can be installed using the following command in the root folder: 
-```
-pip install -e . 
-```
-
-For the GPU version with cuda run: 
+The repository can be installed using pip (without having the rendering functionality): 
 ```
 pip install -e .[gpu]
 ```
 
-### Installation of the render environment
-
-There is a dependency conflict between the torch cuda version and the jax cuda version. For this reason, we use a different virtual environment to run the cuda-based Gaussian splatting renderer which uses the GPU enabled rendering, and a cpu version of `vbgs`.
+For the rendering functionality, you can use a virtual environment. 
 
 To use the renderer from the [Gaussian Splatting repository](https://github.com/graphdeco-inria/gaussian-splatting). Please create a new virtual environment and clone this repository at the same parent location as `vbgs`. Install the gaussian-splatting submodules (`simple-knn`, `diff-gaussian-rasterization`) in this new virtula environment by running `python setup.py install`. Now you can install the **`cpu`** version of `vbgs` within this environment. 
+
+As there is a dependency conflict between the torch cuda version and the jax cuda version, we recommend using conda install for the torch dependencies and pip for the jax dependencies as executed in the `install_deps.sh` script.
+
+```
+conda create -n vbgs python=3.11
+conda activate vbgs 
+bash ./install_deps.sh
+```
+
 
 ## Downloading the Data 
 
