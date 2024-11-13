@@ -19,7 +19,7 @@ As there is a dependency conflict between the torch cuda version and the jax cud
 ```
 conda create -n vbgs python=3.11
 conda activate vbgs 
-bash ./install_deps.sh
+bash install_deps.sh
 ```
 
 
