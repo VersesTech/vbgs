@@ -124,7 +124,9 @@ class HabitatDataIterator:
         else:
             depth_path = str(im).replace(".jpeg", "_depth.exr")
             if os.path.exists(depth_path):
-                d = cv2.imread(d, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+                d = cv2.imread(
+                    depth_path, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH
+                )
             else:
                 d = str(im).replace(".jpeg", "_depth.jpeg")
                 d = cv2.imread(d, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
