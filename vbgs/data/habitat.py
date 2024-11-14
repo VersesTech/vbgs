@@ -27,6 +27,9 @@ import json
 from vbgs.camera import transform_uvd_to_points
 from vbgs.data.utils import normalize_data
 
+import torch
+from vbgs.data.depth import load_depth_model, predict_depth
+
 rot = np.eye(4)
 rot[1, 1] = -1
 rot[2, 2] = -1
@@ -36,13 +39,16 @@ def load_camera_params(im_path):
     with open(str(im_path).replace(".jpeg", "_camera_params.json"), "r") as f:
         d = json.load(f)
     intrinsics = np.eye(4)
-    intrinsics[:3, :3] = np.array(d["camera_intrinsics"])
+    intrinsics[:3, :3] = np.array(d["camera_intrinsics"])[:3, :3]
 
     extrinsics = np.eye(4)
     extrinsics[:3, :3] = np.array(d["R_cam2world"])
     extrinsics[:3, -1] = d["t_cam2world"]
 
-    return intrinsics, extrinsics @ rot
+    if "habitat" in str(im_path):
+        extrinsics = extrinsics @ rot
+
+    return intrinsics, extrinsics
 
 
 class TUMDataIterator:
@@ -76,22 +82,43 @@ class TUMDataIterator:
 
 
 class HabitatDataIterator:
-    def __init__(self, path, idx, data_params):
+    def __init__(
+        self,
+        path,
+        idx,
+        data_params,
+        estimate_depth=False,
+        device="cuda:0",
+        from_opengl=True,
+    ):
         path = Path(path)
         if idx == "":
-            self._frames = sorted(list(path.glob("*.jpeg")))
+            self._frames = sorted(
+                list(path.glob("*.jpeg")),
+                key=lambda x: int(str(x).replace(".jpeg", "").split("/")[-1]),
+            )
         else:
             self._frames = sorted(list(path.glob(f"{idx}_*.jpeg")))
         self._data_params = data_params
 
         self._index = 0
 
+        self._estimate_depth = estimate_depth
+        if self._estimate_depth:
+            self._depth_model = load_depth_model("zoe", device)
+
+        self._from_opengl = from_opengl
+
     def _get_frame(self, index):
         im = self._frames[index]
 
         rgb = cv2.imread(im)[..., [2, 1, 0]]
-        d = str(im).replace(".jpeg", "_depth.exr")
-        d = cv2.imread(d, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+
+        if self._estimate_depth:
+            d = predict_depth(rgb, *self._depth_model).detach().numpy()
+        else:
+            d = str(im).replace(".jpeg", "_depth.exr")
+            d = cv2.imread(d, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
 
         intrinsics, extrinsics = load_camera_params(im)
 
@@ -100,7 +127,7 @@ class HabitatDataIterator:
             d,
             extrinsics,
             intrinsics,
-            from_opengl=True,
+            from_opengl=self._from_opengl,
             filter_zero=False,  # True
         )
 
