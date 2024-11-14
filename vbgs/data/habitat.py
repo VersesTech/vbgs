@@ -38,6 +38,7 @@ rot[2, 2] = -1
 def load_camera_params(im_path):
     with open(str(im_path).replace(".jpeg", "_camera_params.json"), "r") as f:
         d = json.load(f)
+
     intrinsics = np.eye(4)
     intrinsics[:3, :3] = np.array(d["camera_intrinsics"])[:3, :3]
 
@@ -48,7 +49,9 @@ def load_camera_params(im_path):
     if "habitat" in str(im_path):
         extrinsics = extrinsics @ rot
 
-    return intrinsics, extrinsics
+    depth_scale = d.get("scale", 1)
+
+    return intrinsics, extrinsics, depth_scale
 
 
 class TUMDataIterator:
@@ -93,8 +96,10 @@ class HabitatDataIterator:
     ):
         path = Path(path)
         if idx == "":
+            frames = list(path.glob("*.jpeg"))
+            frames = [f for f in frames if "depth" not in str(f)]
             self._frames = sorted(
-                list(path.glob("*.jpeg")),
+                frames,
                 key=lambda x: int(str(x).replace(".jpeg", "").split("/")[-1]),
             )
         else:
@@ -105,7 +110,7 @@ class HabitatDataIterator:
 
         self._estimate_depth = estimate_depth
         if self._estimate_depth:
-            self._depth_model = load_depth_model("zoe", device)
+            self._depth_model = load_depth_model("dav2", device)
 
         self._from_opengl = from_opengl
 
@@ -115,12 +120,18 @@ class HabitatDataIterator:
         rgb = cv2.imread(im)[..., [2, 1, 0]]
 
         if self._estimate_depth:
-            d = predict_depth(rgb, *self._depth_model).detach().numpy()
+            d = predict_depth(rgb, *self._depth_model)
         else:
-            d = str(im).replace(".jpeg", "_depth.exr")
-            d = cv2.imread(d, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+            depth_path = str(im).replace(".jpeg", "_depth.exr")
+            if os.path.exists(depth_path):
+                d = cv2.imread(d, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+            else:
+                d = str(im).replace(".jpeg", "_depth.jpeg")
+                d = cv2.imread(d, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+                d = d / 255.0
 
-        intrinsics, extrinsics = load_camera_params(im)
+        intrinsics, extrinsics, depth_scale = load_camera_params(im)
+        d = depth_scale * d
 
         points, rgb = transform_uvd_to_points(
             rgb,
@@ -128,7 +139,7 @@ class HabitatDataIterator:
             extrinsics,
             intrinsics,
             from_opengl=self._from_opengl,
-            filter_zero=False,  # True
+            filter_zero=False,
         )
 
         data = jnp.concatenate([points, rgb], axis=1)
