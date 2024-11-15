@@ -27,7 +27,6 @@ import json
 from vbgs.camera import transform_uvd_to_points
 from vbgs.data.utils import normalize_data
 
-import torch
 from vbgs.data.depth import load_depth_model, predict_depth
 
 rot = np.eye(4)
@@ -114,10 +113,12 @@ class HabitatDataIterator:
 
         self._from_opengl = from_opengl
 
-    def _get_frame(self, index):
+    def _get_frame_rgbd(self, index):
         im = self._frames[index]
 
         rgb = cv2.imread(im)[..., [2, 1, 0]]
+
+        intrinsics, extrinsics, depth_scale = load_camera_params(im)
 
         if self._estimate_depth:
             d = predict_depth(rgb, *self._depth_model)
@@ -132,8 +133,12 @@ class HabitatDataIterator:
                 d = cv2.imread(d, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
                 d = d / 255.0
 
-        intrinsics, extrinsics, depth_scale = load_camera_params(im)
-        d = depth_scale * d
+            d = depth_scale * d
+
+        return rgb, d, intrinsics, extrinsics
+
+    def _get_frame(self, index):
+        rgb, d, intrinsics, extrinsics = self._get_frame_rgbd(index)
 
         points, rgb = transform_uvd_to_points(
             rgb,
