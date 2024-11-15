@@ -114,6 +114,7 @@ def load_dav2(device):
             da_path
             / f"checkpoints/depth_anything_v2_metric_{dataset}_{encoder}.pth",
             map_location="cpu",
+            weights_only=True,
         )
     )
 
@@ -124,7 +125,7 @@ def load_dav2(device):
         return x[..., [2, 0, 1]]
 
     def postprocess(x, shape):
-        return x
+        return x * 0.7
 
     return model.infer_image, preprocess, postprocess
 
