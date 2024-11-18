@@ -70,6 +70,16 @@ class ReplicaDataIterator:
         self.key = jr.PRNGKey(0)
 
 
+    def load_camera_params(self, idx):
+        camera_to_world = self.poses[idx]
+        return intrinsics, camera_to_world
+
+    def get_frame(self, i):
+        idx = str(i).zfill(6)
+        colorpath = self._datapath / f"frame{idx}.jpg"
+        depthpath = self._datapath / f"depth{idx}.png"
+        return colorpath, depthpath
+
     def __len__(self):
         return len(self.poses)
 

@@ -20,7 +20,7 @@ from PIL import Image
 
 import vbgs
 from vbgs.data.habitat import HabitatDataIterator, load_camera_params
-
+from vbgs.data.replica import ReplicaDataIterator
 import jax.numpy as jnp
 from vbgs.camera import opengl_to_frame
 
@@ -34,7 +34,7 @@ def read_json(f):
 if __name__ == "__main__":
     root_path = Path(vbgs.__file__).parent.parent
 
-    test_scene_path = Path("/home/shared/splatam")
+    test_scene_path = Path("/home/shared/Replica/")
     scenes = [i.name for i in test_scene_path.glob("*")]
     scenes = [i for i in scenes if "raw" not in str(i)]
 
@@ -42,16 +42,17 @@ if __name__ == "__main__":
         data_path = test_scene_path / s
         print(data_path)
 
-        indices = np.arange(200).tolist()
+        indices = np.arange(0, 200, 10).tolist()
+        val_indices = np.arange(5, 205, 10).tolist()
 
-        data_iter = HabitatDataIterator(data_path, "", None, from_opengl=False)
+        data_iter = ReplicaDataIterator(data_path)
 
         frames = []
         frames_val = []
-        for i in np.arange(len(data_iter)):
-            frame = data_iter._frames[i]
-
-            intrinsics, extrinsics, _ = load_camera_params(frame)
+        for i, pc in enumerate(data_iter):
+            frame, _ = data_iter.get_frame(i)
+            print(frame)
+            intrinsics, extrinsics  = data_iter.load_camera_params(i)
 
             extrinsics = jnp.dot(extrinsics, opengl_to_frame)
 
@@ -75,7 +76,7 @@ if __name__ == "__main__":
 
             if i in indices:
                 frames.append(f)
-            else:
+            if i in val_indices:
                 frames_val.append(f)
 
         out_path = root_path / f"resources/large-datasets/{s}"
