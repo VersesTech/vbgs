@@ -68,7 +68,7 @@ class ReplicaDataIterator:
 
     def load_camera_params(self, idx):
         camera_to_world = self.poses[idx]
-        return intrinsics, camera_to_world
+        return self.intrinsics, camera_to_world
 
     def get_frame(self, i):
         idx = str(i).zfill(6)
@@ -92,20 +92,19 @@ class ReplicaDataIterator:
         i = self.indices[self.i]
         self.i += 1
 
-        idx = str(i).zfill(6)
+        colorpath, depthpath = self.get_frame(i)
 
         color = jnp.array(
-            Image.open(self._datapath / f"frame{idx}.jpg").resize(
+            Image.open(colorpath).resize(
                 (self.w, self.h), Image.Resampling.NEAREST
             )
         )
         depth = jnp.array(
-            Image.open(self._datapath / f"depth{idx}.png").resize(
+            Image.open(depthpath).resize(
                 (self.w, self.h), Image.Resampling.NEAREST
             )
         )
         depth = depth / self.depth_scale
-        # depth = depth / 0.7
         camera_to_world = self.poses[i]
         data = jnp.concatenate(
             transform_uvd_to_points(
