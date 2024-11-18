@@ -106,8 +106,11 @@ def construct_covariance(lower, device="cuda:0"):
 
 
 def vbgs_model_to_splat(model_path, device="cuda:0", dtype=torch.float32):
-    with open(model_path, "r") as f:
-        d = json.load(f)
+    if "json" in str(model_path):
+        with open(model_path, "r") as f:
+            d = json.load(f)
+    else:
+        d = jnp.load(model_path)
 
     mu, si = np.array(d["mu"]), np.array(d["si"])
     alpha = np.array(d["alpha"])
@@ -123,7 +126,7 @@ def vbgs_model_to_splat(model_path, device="cuda:0", dtype=torch.float32):
     ).unsqueeze(1)
     model._features_rest = torch.empty(0).to(device=device, dtype=dtype)
     model._opacity = torch.tensor(
-        (alpha[mask] > 0.000001), dtype=dtype, device=device
+        (alpha[mask] > 0.001), dtype=dtype, device=device
     )
     model.opacity_activation = lambda x: x
     model._scaling = torch.tensor(scaling[mask], dtype=dtype, device=device)
