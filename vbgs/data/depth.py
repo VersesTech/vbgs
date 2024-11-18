@@ -1,6 +1,5 @@
 from PIL import Image
 import numpy as np
-import torch
 
 from pathlib import Path
 
@@ -9,6 +8,7 @@ import vbgs
 
 
 def load_depth_model(model_name, device):
+    import torch
     if model_name == "zoe":
         return load_zoe(device)
     elif model_name == "dpt":
