@@ -1,32 +1,46 @@
-from vbgs.data.habitat import HabitatDataIterator, load_camera_params
+from vbgs.data.replica import ReplicaDataIterator
+
 
 from pathlib import Path
 
 import numpy as np
 import shutil
 import cv2
+from vbgs.data.depth import load_depth_model, predict_depth
+
+from PIL import Image
+
+from tqdm import trange
 
 if __name__ == "__main__":
     name = "room0"
-    data_path = Path(f"/home/shared/splatam/{name}")
+    data_path = Path(f"/home/shared/Replica/{name}")
 
-    depth_loc = Path(f"/home/shared/splatam-d_estimated/{name}")
-    depth_loc.mkdir(exist_ok=True, parents=True)
+    depth_loc = Path(f"/home/shared/Replica-depth_estimated/{name}")
+    depth_loc.parent.mkdir(exist_ok=True, parents=True)
 
-    for f in data_path.glob("*"):
-        shutil.copyfile(f, depth_loc / f.name)
+    if not depth_loc.exists():
+        shutil.copytree(str(data_path), str(depth_loc))
 
-    estimated_iter = HabitatDataIterator(
-        str(depth_loc), "", None, estimate_depth=True, from_opengl=False
-    )
+    depth_model = load_depth_model("dav2", "cuda:0")
+    data_iter = ReplicaDataIterator(str(depth_loc), None, None)
 
-    for i in range(len(estimated_iter._frames)):
-        _, d, _, _ = estimated_iter._get_frame_rgbd(i)
-        *_, s = load_camera_params(estimated_iter._frames[i])
+    for i in trange(len(data_iter)):
+        idx = str(i).zfill(6)
+        filename = data_iter._datapath / f"frame{idx}.jpg"
 
-        filename = str(estimated_iter._frames[i]).replace(
-            ".jpeg", "_depth.jpeg"
+        color = np.array(
+            Image.open(filename).resize(
+                (data_iter.w, data_iter.h), Image.Resampling.NEAREST
+            )
         )
+        color = color.astype(np.uint8)
+        d = predict_depth(color.copy(), *depth_model)
 
-        depth_image = (255 * (d / s)).astype(np.uint8)
-        cv2.imwrite(filename, depth_image)
+        d_out = d * data_iter.depth_scale
+        d_out = d_out.astype(np.uint16)
+
+        outfile = (
+            str(filename).replace("frame", "depth").replace(".jpg", ".png")
+        )
+        cv2.imwrite(outfile, d_out)
