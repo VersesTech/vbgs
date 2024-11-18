@@ -37,22 +37,25 @@ if __name__ == "__main__":
     test_scene_path = Path("/home/shared/Replica/")
     scenes = [i.name for i in test_scene_path.glob("*")]
     scenes = [i for i in scenes if "raw" not in str(i)]
+    scenes = [i for i in scenes if "." not in str(i)]
+    print(scenes)
 
     for s in scenes:
         data_path = test_scene_path / s
-        print(data_path)
 
-        indices = np.arange(0, 200, 10).tolist()
-        val_indices = np.arange(5, 205, 10).tolist()
+        indices = np.arange(0, 2000, 10).tolist()
+        val_indices = np.arange(5, 2000, 10).tolist()
 
         data_iter = ReplicaDataIterator(data_path)
 
         frames = []
         frames_val = []
         for i, pc in enumerate(data_iter):
+            if i not in indices and i not in val_indices:
+                continue
+
             frame, _ = data_iter.get_frame(i)
-            print(frame)
-            intrinsics, extrinsics  = data_iter.load_camera_params(i)
+            intrinsics, extrinsics = data_iter.load_camera_params(i)
 
             extrinsics = jnp.dot(extrinsics, opengl_to_frame)
 
@@ -65,10 +68,10 @@ if __name__ == "__main__":
             fov_y = 2 * np.arctan2(intrinsics[1][2], fy)
 
             f = {
-                "camera_angle_x": fov_x,
-                "camera_angle_y": fov_y,
-                "width": 2 * intrinsics[0][2],
-                "height": 2 * intrinsics[1][2],
+                "camera_angle_x": float(fov_x),
+                "camera_angle_y": float(fov_y),
+                "width": 2 * float(intrinsics[0][2]),
+                "height": 2 * float(intrinsics[1][2]),
                 "file_path": str(frame),
                 "rotation": None,
                 "transform_matrix": extrinsics.tolist(),
@@ -79,16 +82,16 @@ if __name__ == "__main__":
             if i in val_indices:
                 frames_val.append(f)
 
-        out_path = root_path / f"resources/large-datasets/{s}"
+        out_path = Path("/home/shared/Replica-blender") / s
         out_path.mkdir(exist_ok=True, parents=True)
         with open(out_path / "transforms_train.json", "w") as fp:
             json.dump(
                 {
                     "frames": frames,
-                    "camera_angle_x": frames_val[0]["camera_angle_x"],
-                    "camera_angle_y": frames_val[0]["camera_angle_y"],
-                    "width": 2 * intrinsics[0][2],
-                    "height": 2 * intrinsics[1][2],
+                    "camera_angle_x": frames[0]["camera_angle_x"],
+                    "camera_angle_y": frames[0]["camera_angle_y"],
+                    "width": frames[0]["width"],
+                    "height": frames[0]["height"],
                 },
                 fp,
                 indent=2,
@@ -99,10 +102,10 @@ if __name__ == "__main__":
             json.dump(
                 {
                     "frames": frames,
-                    "camera_angle_x": frames_val[0]["camera_angle_x"],
-                    "camera_angle_y": frames_val[0]["camera_angle_y"],
-                    "width": 2 * intrinsics[0][2],
-                    "height": 2 * intrinsics[1][2],
+                    "camera_angle_x": frames[0]["camera_angle_x"],
+                    "camera_angle_y": frames[0]["camera_angle_y"],
+                    "width": frames[0]["width"],
+                    "height": frames[0]["height"],
                 },
                 fp,
                 indent=2,
@@ -113,10 +116,10 @@ if __name__ == "__main__":
             json.dump(
                 {
                     "frames": frames_val,
-                    "camera_angle_x": frames_val[0]["camera_angle_x"],
-                    "camera_angle_y": frames_val[0]["camera_angle_y"],
-                    "width": 2 * intrinsics[0][2],
-                    "height": 2 * intrinsics[1][2],
+                    "camera_angle_x": frames[0]["camera_angle_x"],
+                    "camera_angle_y": frames[0]["camera_angle_y"],
+                    "width": frames[0]["width"],
+                    "height": frames[0]["height"],
                 },
                 fp,
                 indent=2,

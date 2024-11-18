@@ -35,16 +35,47 @@ from vbgs.data.utils import create_normalizing_params, normalize_data
 from vbgs.model.utils import random_mean_init, store_model
 from vbgs.model.train import fit_gmm_step
 
-from vbgs.data.habitat import HabitatDataIterator
+# from vbgs.data.habitat import HabitatDataIterator
+from vbgs.data.replica import ReplicaDataIterator
 from vbgs.model.reassign import reassign
 
 
 from model_volume import get_volume_delta_mixture
 
+from vbgs.render.volume import (
+    readCamerasFromTransforms,
+    render_img,
+    vbgs_model_to_splat,
+)
+
+from PIL import Image
+from vbgs.metrics import calc_psnr, calc_mse
+import matplotlib.pyplot as plt
+
+
+def evaluate(model, cameras, store_path):
+    psnrs = []
+    mses = []
+    for i in range(len(cameras)):
+        x = np.array(Image.open(cameras[i].image_path)) / 255.0
+        x_hat = render_img(model, cameras, i, 0, scale=1.0)
+
+        psnrs.append(calc_psnr(x, x_hat))
+        mses.append(calc_mse(x, x_hat))
+
+    # plt.imshow(x_hat)
+    # plt.savefig("out.png")
+
+    np.savez(store_path, psnr=np.array(psnrs), mse=np.array(mses))
+    return np.array(psnrs), np.array(mses)
+
+
+def no_reassign(*x):
+    return x[0]
+
 
 def fit_continual(
     data_path,
-    data_index,
     n_components,
     init_random=False,
     key=None,
@@ -53,7 +84,6 @@ def fit_continual(
     use_reassign=True,
     reassign_fraction=0.05,
     seed=0,
-    from_opengl=True,
 ):
     np.random.seed(seed)
     random.seed(seed)
@@ -61,25 +91,33 @@ def fit_continual(
     if key is None:
         key = jr.PRNGKey(0)
 
-    if use_reassign:
-        reassign_fn = reassign
-    else:
-        reassign_fn = lambda *x: x[0]
+    reassign_fn = reassign if use_reassign else no_reassign
+
+    # ====
+    eval_cameras = readCamerasFromTransforms(
+        Path(
+            str(data_path)
+            .replace(
+                "Replica", "Replica-blender"
+            )  # Go to the location of the blender transforms file
+            .replace(
+                "depth_estimated", ""
+            )  # The depth estimated frames use the same validation set
+        ),
+        "transforms_eval.json",
+        True,
+    )
 
     # ============
     # Some subsampling
-    data_iter = HabitatDataIterator(
-        data_path,
-        data_index,
-        None,
-        from_opengl=from_opengl,
-        estimate_depth=False,
-    )
-    data_iter._frames = data_iter._frames[:200]
-
     x_data = None
-    data_params = None
+    data_params = create_normalizing_params(
+        [-5, 5], [-5, 5], [-5, 5], [0, 1], [0, 1], [0, 1]
+    )
     if not init_random:
+        data_iter = ReplicaDataIterator(data_path, None)
+        data_iter.indices = np.arange(0, 2000, 10)
+
         all_data = []
         for frame in data_iter:
             all_data.append(frame)
@@ -90,19 +128,8 @@ def fit_continual(
         print("Normalizing data parameters: ")
         print(data_params, end="\n\n")
 
-    if data_params is None:
-        data_params = create_normalizing_params(
-            [-5, 5], [-5, 5], [-5, 5], [0, 1], [0, 1], [0, 1]
-        )
-    data_iter = HabitatDataIterator(
-        data_path,
-        data_index,
-        data_params,
-        from_opengl=from_opengl,
-        estimate_depth=False,
-    )
-    data_iter._frames = data_iter._frames[:200]
-    print(data_iter._frames)
+    data_iter = ReplicaDataIterator(data_path, None)
+    data_iter.indices = np.arange(0, 2000, 10)
 
     key, subkey = jr.split(key)
     mean_init = random_mean_init(
@@ -130,7 +157,9 @@ def fit_continual(
 
     model = copy.deepcopy(prior_model)
 
-    metrics = dict({})
+    metrics = dict(
+        {"psnr": {"mean": [], "std": []}, "mse": {"mean": [], "std": []}}
+    )
     prior_stats, space_stats, color_stats = None, None, None
     for step, x in tqdm(enumerate(data_iter), total=len(data_iter)):
         prior_model = reassign_fn(
@@ -147,7 +176,32 @@ def fit_continual(
         )
 
         if step % eval_every == 0:
-            store_model(model, data_params, f"model_{step:02d}.json")
+            store_model(
+                model, data_params, f"model_{step:02d}.npz", use_numpy=True
+            )
+            p, m = evaluate(
+                vbgs_model_to_splat(f"model_{step:02d}.npz"),
+                eval_cameras,
+                f"results_{step:02d}.npz",
+            )
+
+            metrics["psnr"]["mean"].append(p.mean())
+            metrics["psnr"]["std"].append(p.std())
+            metrics["mse"]["mean"].append(m.mean())
+            metrics["mse"]["std"].append(m.std())
+
+            if step % 10 == 0:
+                print(f"PSNR: {p.mean():.2f} +- {p.std():.2f}")
+
+    fig, ax = plt.subplots(1, 2, figsize=(8, 4))
+    for i, (k, v) in enumerate(metrics.items()):
+        y, std = np.array(metrics[k]["mean"]), np.array(metrics[k]["std"])
+        ax[i].plot(y, label=k)
+        ax[i].fill_between(
+            np.arange(len(y)), y - 1.96 * std, y + 1.96 * std, alpha=0.25
+        )
+    plt.legend()
+    plt.savefig("metrics.png")
 
     # Make sure the final model is stored as well
     store_model(model, data_params, f"model_{step:02d}.json")
@@ -157,26 +211,22 @@ def fit_continual(
 def run_experiment(
     key,
     data_path,
-    data_index,
     n_components,
     init_random,
     batch_size,
     use_reassign,
     reassign_fraction,
-    from_opengl,
 ):
     # Fit continual VBEM
     key, subkey = jr.split(key)
     metrics = fit_continual(
         data_path,
-        data_index,
         n_components,
         key=subkey,
         init_random=init_random,
         batch_size=batch_size,
         use_reassign=use_reassign,
         reassign_fraction=reassign_fraction,
-        from_opengl=from_opengl,
     )
     rich.print(metrics)
 
@@ -186,7 +236,7 @@ def run_experiment(
 @hydra.main(
     version_base=None,
     config_path="configs",
-    config_name="splatam",
+    config_name="replica",
 )
 def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
@@ -199,12 +249,10 @@ def main(cfg: DictConfig) -> None:
         key=jr.PRNGKey(0),
         n_components=cfg.model.n_components,
         data_path=root_path / Path(cfg.data.data_path),
-        data_index=cfg.data.data_index,
         init_random=cfg.model.init_random,
         batch_size=cfg.train.batch_size,
         use_reassign=cfg.model.use_reassign,
         reassign_fraction=float(cfg.model.reassign_fraction),
-        from_opengl=cfg.data.from_opengl,
     )
     results.update({"config": OmegaConf.to_container(cfg)})
 

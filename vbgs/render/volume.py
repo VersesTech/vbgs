@@ -105,16 +105,7 @@ def construct_covariance(lower, device="cuda:0"):
     return cov
 
 
-def vbgs_model_to_splat(model_path, device="cuda:0", dtype=torch.float32):
-    if "json" in str(model_path):
-        with open(model_path, "r") as f:
-            d = json.load(f)
-    else:
-        d = jnp.load(model_path)
-
-    mu, si = np.array(d["mu"]), np.array(d["si"])
-    alpha = np.array(d["alpha"])
-
+def mu_si_alpha_to_3dgs(mu, si, alpha, dtype=torch.float32, device="cuda:0"):
     scaling, rotation = covariance_to_scaling_rotation(si[:, :3, :3])
     mask = scaling.sum(axis=-1) > -1
 
@@ -133,4 +124,18 @@ def vbgs_model_to_splat(model_path, device="cuda:0", dtype=torch.float32):
     model.scaling_activation = lambda x: x
     model._rotation = torch.tensor(rotation[mask], dtype=dtype, device=device)
     model.rotation_activation = lambda x: x
+    return model
+
+
+def vbgs_model_to_splat(model_path, device="cuda:0", dtype=torch.float32):
+    if "json" in str(model_path):
+        with open(model_path, "r") as f:
+            d = json.load(f)
+    else:
+        d = jnp.load(model_path)
+
+    mu, si = np.array(d["mu"]), np.array(d["si"])
+    alpha = np.array(d["alpha"])
+
+    model = mu_si_alpha_to_3dgs(mu, si, alpha, device=device, dtype=dtype)
     return model
