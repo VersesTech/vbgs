@@ -122,7 +122,7 @@ def load_dav2(device):
 
     def preprocess(x):
         # model takes BGR
-        return x[..., [2, 0, 1]]
+        return x[..., [2, 1, 0]]
 
     def postprocess(x, shape):
         return x * 0.7
