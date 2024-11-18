@@ -19,19 +19,23 @@ import jax.random as jr
 import jax.numpy as jnp
 
 
-def store_model(model, data_params, filename):
+def store_model(model, data_params, filename, use_numpy=True):
     mu, si = model.denormalize(data_params, clip_val=None)
     alpha = model.prior.alpha.reshape(-1)
 
-    # Storing the model as a json
-    model_dict = {
-        "mu": mu.tolist(),
-        "si": si.tolist(),
-        "alpha": alpha.tolist(),
-    }
+    if use_numpy:
+        jnp.savez(filename.replace(".json", ".npz"), mu=mu, si=si, alpha=alpha)
 
-    with open(filename, "w") as f:
-        json.dump(model_dict, f, indent=2)
+    else:
+        # Storing the model as a json
+        model_dict = {
+            "mu": mu.tolist(),
+            "si": si.tolist(),
+            "alpha": alpha.tolist(),
+        }
+
+        with open(filename, "w") as f:
+            json.dump(model_dict, f, indent=2)
 
 
 def random_mean_init(
