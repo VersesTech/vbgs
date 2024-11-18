@@ -35,8 +35,8 @@ if __name__ == "__main__":
     root_path = Path(vbgs.__file__).parent.parent
 
     test_scene_path = Path("/home/shared/splatam")
-    # scenes = [i.name for i in test_scene_path.glob("*")]
-    scenes = ["room0"]
+    scenes = [i.name for i in test_scene_path.glob("*")]
+    scenes = [i for i in scenes if "raw" not in str(i)]
 
     for s in scenes:
         data_path = test_scene_path / s
@@ -73,7 +73,6 @@ if __name__ == "__main__":
                 "transform_matrix": extrinsics.tolist(),
             }
 
-            print(i, i in indices)
             if i in indices:
                 frames.append(f)
             else:
@@ -82,11 +81,31 @@ if __name__ == "__main__":
         out_path = root_path / f"resources/large-datasets/{s}"
         out_path.mkdir(exist_ok=True, parents=True)
         with open(out_path / "transforms_train.json", "w") as fp:
-            json.dump({"frames": frames}, fp, indent=2)
+            json.dump(
+                {
+                    "frames": frames,
+                    "camera_angle_x": frames_val[0]["camera_angle_x"],
+                    "camera_angle_y": frames_val[0]["camera_angle_y"],
+                    "width": 2 * intrinsics[0][2],
+                    "height": 2 * intrinsics[1][2],
+                },
+                fp,
+                indent=2,
+            )
 
         # we changed the script to fit the test data for blender so now we have to use this naming
         with open(out_path / "transforms_test.json", "w") as fp:
-            json.dump({"frames": frames}, fp, indent=2)
+            json.dump(
+                {
+                    "frames": frames,
+                    "camera_angle_x": frames_val[0]["camera_angle_x"],
+                    "camera_angle_y": frames_val[0]["camera_angle_y"],
+                    "width": 2 * intrinsics[0][2],
+                    "height": 2 * intrinsics[1][2],
+                },
+                fp,
+                indent=2,
+            )
 
         # we changed the script to fit the test data for blender so now we have to use this naming
         with open(out_path / "transforms_eval.json", "w") as fp:
