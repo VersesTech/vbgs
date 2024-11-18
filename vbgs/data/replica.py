@@ -26,52 +26,48 @@ import jax.random as jr
 
 from functools import partial
 
-from vbgs.camera import transform_uvd_to_points
+from vbgs.camera import transform_uvd_to_points, opengl_to_frame
 from vbgs.data.utils import normalize_data
 
 
-depth_scale = 6553.5
-fx, fy, x0, y0 = 600.0, 600.0, 599.5, 339.5
-h, w = 680, 1200
-intrinsics = jnp.array([
-    [fx, 0.0, x0, 0.0],
-    [0.0, fy, y0, 0.0],
-    [0.0, 0.0 , 1.0, 0.0],
-    [0.0 ,0.0 , 0.0, 1.0]
-])
-
 class ReplicaDataIterator:
-    def __init__(
-        self,
-        datapath,
-        data_params=None,
-        subsample=None
-    ):
+    def __init__(self, datapath, data_params=None, subsample=None):
         self._data_params = data_params
         self._subsample = subsample
         self._datapath = Path(datapath) / "results/"
         posepath = Path(datapath) / "traj.txt"
         with open(posepath, "r") as f:
             lines = f.readlines()
-            lines = jnp.array(list(map(
-                lambda l: [float (x) for x in l.strip().split(" ")],
-                lines
-            )))
+            lines = jnp.array(
+                list(
+                    map(
+                        lambda l: [float(x) for x in l.strip().split(" ")],
+                        lines,
+                    )
+                )
+            )
         poses = jnp.reshape(lines, (len(lines), 4, 4))
-        opengl_to_frame = jnp.array(
-            [[1, 0, 0, 0],
-             [0, -1, 0, 0],
-             [0, 0, -1, 0],
-             [0, 0, 0, 1]]
-        )
         f = jax.vmap(lambda x: jnp.dot(x, opengl_to_frame))
         self.poses = f(poses)
         self.i = 0
         self.key = jr.PRNGKey(0)
 
+        self.depth_scale = 6553.5
+        fx, fy, x0, y0 = 600.0, 600.0, 599.5, 339.5
+        self.h, self.w = 680, 1200
+        self.intrinsics = jnp.array(
+            [
+                [fx, 0.0, x0, 0.0],
+                [0.0, fy, y0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+
+        self.indices = np.arange(len(self.poses))
 
     def __len__(self):
-        return len(self.poses)
+        return len(self.indices)
 
     def __iter__(self):
         return self
@@ -82,27 +78,40 @@ class ReplicaDataIterator:
         # debugger.
         if self.i >= len(self):
             raise StopIteration
-        idx = str(self.i).zfill(6)
-        color = jnp.array(Image.open(self._datapath / f"frame{idx}.jpg").resize((w, h), Image.Resampling.NEAREST))
-        depth = jnp.array(Image.open(self._datapath / f"depth{idx}.png").resize((w, h), Image.Resampling.NEAREST))
-        depth = depth / depth_scale
-        camera_to_world = self.poses[self.i]
+
+        i = self.indices[self.i]
         self.i += 1
+
+        idx = str(i).zfill(6)
+
+        color = jnp.array(
+            Image.open(self._datapath / f"frame{idx}.jpg").resize(
+                (self.w, self.h), Image.Resampling.NEAREST
+            )
+        )
+        depth = jnp.array(
+            Image.open(self._datapath / f"depth{idx}.png").resize(
+                (self.w, self.h), Image.Resampling.NEAREST
+            )
+        )
+        depth = depth / self.depth_scale
+        # depth = depth / 0.7
+        camera_to_world = self.poses[i]
         data = jnp.concatenate(
             transform_uvd_to_points(
                 color[..., :3],
                 depth,
                 camera_to_world,
-                intrinsics,
+                self.intrinsics,
                 from_opengl=True,
-                filter_zero=True
+                filter_zero=True,
             ),
-            axis=1
+            axis=1,
         )
         if self._data_params is not None:
             data, _ = normalize_data(data, self._data_params)
         if self._subsample is not None:
             self.key, subkey = jr.split(self.key)
             data = jr.permutation(subkey, data, independent=False)
-            data = data[:self._subsample]
+            data = data[: self._subsample]
         return data
