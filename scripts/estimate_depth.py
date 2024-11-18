@@ -27,7 +27,6 @@ if __name__ == "__main__":
         filename = str(estimated_iter._frames[i]).replace(
             ".jpeg", "_depth.jpeg"
         )
-        print(filename)
 
         depth_image = (255 * (d / s)).astype(np.uint8)
         cv2.imwrite(filename, depth_image)
