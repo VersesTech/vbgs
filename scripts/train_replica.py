@@ -58,13 +58,10 @@ def evaluate(model, cameras, store_path):
     mses = []
     for i in range(len(cameras)):
         x = np.array(Image.open(cameras[i].image_path)) / 255.0
-        x_hat = render_img(model, cameras, i, 0, scale=1.0)
+        x_hat = render_img(model, cameras, i, 0, scale=1.4)
 
         psnrs.append(calc_psnr(x, x_hat))
         mses.append(calc_mse(x, x_hat))
-
-    # plt.imshow(x_hat)
-    # plt.savefig("out.png")
 
     np.savez(store_path, psnr=np.array(psnrs), mse=np.array(mses))
     return np.array(psnrs), np.array(mses)
@@ -84,7 +81,10 @@ def fit_continual(
     use_reassign=True,
     reassign_fraction=0.05,
     seed=0,
+    device=0,
 ):
+    # the torch stuff should always be on cuda:0
+    torch_device = "cuda:0"
     np.random.seed(seed)
     random.seed(seed)
 
@@ -101,12 +101,12 @@ def fit_continual(
                 "Replica", "Replica-blender"
             )  # Go to the location of the blender transforms file
             .replace(
-                "depth_estimated", ""
+                "-depth_estimated", ""
             )  # The depth estimated frames use the same validation set
         ),
         "transforms_eval.json",
         True,
-    )
+    )[::2]  # Evaluate on 100 frames
 
     # ============
     # Some subsampling
@@ -128,7 +128,7 @@ def fit_continual(
         print("Normalizing data parameters: ")
         print(data_params, end="\n\n")
 
-    data_iter = ReplicaDataIterator(data_path, None)
+    data_iter = ReplicaDataIterator(data_path, data_params)
     data_iter.indices = np.arange(0, 2000, 10)
 
     key, subkey = jr.split(key)
@@ -180,7 +180,9 @@ def fit_continual(
                 model, data_params, f"model_{step:02d}.npz", use_numpy=True
             )
             p, m = evaluate(
-                vbgs_model_to_splat(f"model_{step:02d}.npz"),
+                vbgs_model_to_splat(
+                    f"model_{step:02d}.npz", device=torch_device
+                ),
                 eval_cameras,
                 f"results_{step:02d}.npz",
             )
@@ -216,6 +218,7 @@ def run_experiment(
     batch_size,
     use_reassign,
     reassign_fraction,
+    device,
 ):
     # Fit continual VBEM
     key, subkey = jr.split(key)
@@ -227,6 +230,7 @@ def run_experiment(
         batch_size=batch_size,
         use_reassign=use_reassign,
         reassign_fraction=reassign_fraction,
+        device=device,
     )
     rich.print(metrics)
 
@@ -245,14 +249,22 @@ def main(cfg: DictConfig) -> None:
 
     root_path = Path(vbgs.__file__).parent.parent
 
+    # Minor hack to launch everything at once
+    data_path = cfg.data.data_path
+    if "room0_depth_estimate" in data_path:
+        data_path = data_path.replace("_depth_estimate", "").replace(
+            "Replica", "Replica-depth_estimated"
+        )
+
     results = run_experiment(
         key=jr.PRNGKey(0),
         n_components=cfg.model.n_components,
-        data_path=root_path / Path(cfg.data.data_path),
+        data_path=root_path / Path(data_path),
         init_random=cfg.model.init_random,
         batch_size=cfg.train.batch_size,
         use_reassign=cfg.model.use_reassign,
         reassign_fraction=float(cfg.model.reassign_fraction),
+        device=cfg.device,
     )
     results.update({"config": OmegaConf.to_container(cfg)})
 

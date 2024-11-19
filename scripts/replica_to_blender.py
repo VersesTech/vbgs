@@ -38,9 +38,11 @@ if __name__ == "__main__":
     scenes = [i.name for i in test_scene_path.glob("*")]
     scenes = [i for i in scenes if "raw" not in str(i)]
     scenes = [i for i in scenes if "." not in str(i)]
+    scenes = ["room0"] + [i for i in scenes if i != "room0"]
     print(scenes)
 
     for s in scenes:
+        print(s)
         data_path = test_scene_path / s
 
         indices = np.arange(0, 2000, 10).tolist()
@@ -56,8 +58,6 @@ if __name__ == "__main__":
 
             frame, _ = data_iter.get_frame(i)
             intrinsics, extrinsics = data_iter.load_camera_params(i)
-
-            extrinsics = jnp.dot(extrinsics, opengl_to_frame)
 
             image = Image.open(frame)
 
