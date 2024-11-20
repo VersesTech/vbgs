@@ -1,3 +1,4 @@
+device: 1
 seed: 0
 experiment_name: benchmark-imagenet 
 model:
@@ -18,5 +19,5 @@ hydra:
   run:
     dir: data/${experiment_name}/init_random:${model.init_random}/scale:${model.scale}_cs:${model.color_scale}/components:${model.n_components}_dof:${model.dof}/lr:${train.learning_rate}_iters:${train.n_iters}
   sweep:
-    dir: data/sweep/${run.dir}
+    dir: data/sweep/${hydra.run.dir}
     subdir: ""

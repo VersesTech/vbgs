@@ -1,13 +1,13 @@
 seed: 0
 device: 1
-experiment_name: replica_rooms
+experiment_name: replica_rooms_low_rf
 model: 
   n_components: 100_000
   init_random: True
   dof: 1
   scale: ${model.n_components}
   use_reassign: True
-  reassign_fraction: 0.05
+  reassign_fraction: 0.01
 data: 
   model_name: room0
   data_path: /home/shared/Replica/${data.model_name}/

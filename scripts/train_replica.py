@@ -252,7 +252,7 @@ def main(cfg: DictConfig) -> None:
     # Minor hack to launch everything at once
     data_path = cfg.data.data_path
     if "room0_depth_estimate" in data_path:
-        data_path = data_path.replace("_depth_estimate", "").replace(
+        data_path = data_path.replace("_depth_estimated", "").replace(
             "Replica", "Replica-depth_estimated"
         )
 
