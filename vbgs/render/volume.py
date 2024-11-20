@@ -21,6 +21,7 @@ from pathlib import Path
 
 import jax
 import jax.numpy as jnp
+from jax.scipy.spatial.transform import Rotation
 
 import vbgs
 from vbgs.model.utils import transform_mvn
@@ -29,22 +30,21 @@ root_path = Path(vbgs.__file__).parent.parent
 
 # Gaussian splatting imports
 import torch
+from argparse import ArgumentParser
 
 sys.path.append(str(root_path / "../gaussian-splatting"))
-from scene.gaussian_model import GaussianModel
-from gaussian_renderer import render, network_gui
-from scene.dataset_readers import readCamerasFromTransforms, CameraInfo
-from utils.camera_utils import loadCam
-from arguments import PipelineParams
-from gaussian_renderer import render as render_cuda
-from argparse import ArgumentParser
-from utils.sh_utils import RGB2SH, SH2RGB
-
+# from scene.gaussian_model import GaussianModel
+# from gaussian_renderer import render, network_gui
+# from scene.dataset_readers import readCamerasFromTransforms, CameraInfo
+# from utils.camera_utils import loadCam
+# from arguments import PipelineParams
+# from gaussian_renderer import render as render_cuda
+# 
+# from utils.sh_utils import RGB2SH, SH2RGB
 from functools import partial
 
-
 parser = ArgumentParser(description="Training script parameters")
-pipe = PipelineParams(parser)
+# pipe = PipelineParams(parser)
 
 
 class CustomArgs:
@@ -53,6 +53,30 @@ class CustomArgs:
 
 
 cargs = CustomArgs()
+
+
+
+def render_gsplat(mu, si, alpha, world_to_cams, intrinsics, height, width, device="cuda:0"):
+    jax_to_torch = lambda x: torch.tensor(np.array(x)).to(device)
+    
+    scales, quats = covariance_to_scaling_rotation(si[:, :3,  :3])
+    scales, quats = jax_to_torch(scales), jax_to_torch(quats)
+    colors = jax_to_torch(mu[:, 3:])
+    center_points = jax_to_torch(mu[:, :3])
+    world_to_cams = jax_to_torch(world_to_cams)
+    intrinsics = jax_to_torch(intrinsics)
+
+    return rasterization(
+        center_points,
+        quats,
+        scales,
+        alpha,
+        colors,
+        world_to_cams,
+        intrinsics,
+        width,
+        height
+    )
 
 
 def render_img(model, cams, idx, bg=0, scale=1.41):
