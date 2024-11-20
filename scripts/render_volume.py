@@ -23,6 +23,7 @@ from matplotlib import pyplot as plt
 import vbgs
 from vbgs.model.utils import load_model
 from vbgs.data.blender import BlenderDataIterator
+from vbgs.data.replica import ReplicaDataIterator
 from vbgs.render.volume import (
     readCamerasFromTransforms,
     render_gsplat,
@@ -36,6 +37,12 @@ def show_replica():
     data_path = Path("/home/shared/Replica/room0")
     model_path = Path("/home/shared/vbgs-results/room0_trained.npz")
     mu, si, alpha = load_model(model_path)
+    
+    data_iter = ReplicaDataIterator(data_path)
+    p0 = data_iter.poses[:200]
+    
+    render_gsplat(mu, si, alpha, p0, data_iter.intrinsics, 640, 1200)
+    
     
 
 def show_blender():
