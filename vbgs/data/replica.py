@@ -15,7 +15,6 @@
 
 import numpy as np
 
-import json
 from pathlib import Path
 from PIL import Image
 
@@ -23,8 +22,6 @@ import jax
 import jax.numpy as jnp
 import jax.random as jr
 
-
-from functools import partial
 
 from vbgs.camera import transform_uvd_to_points, opengl_to_frame
 from vbgs.data.utils import normalize_data
