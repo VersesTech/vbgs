@@ -14,20 +14,29 @@
 # limitations under the License.
 
 import rich
+import json
 
 from pathlib import Path
 from PIL import Image
 from matplotlib import pyplot as plt
 
 import vbgs
+from vbgs.model.utils import load_model
 from vbgs.data.blender import BlenderDataIterator
 from vbgs.render.volume import (
     readCamerasFromTransforms,
-    render_img,
-    vbgs_model_to_splat,
+    render_gsplat,
 )
 
 from vbgs.data.habitat import HabitatDataIterator
+
+
+def show_replica():
+    root_path = Path(vbgs.__file__).parent.parent
+    data_path = Path("/home/shared/Replica/room0")
+    model_path = Path("/home/shared/vbgs-results/room0_trained.npz")
+    mu, si, alpha = load_model(model_path)
+    
 
 def show_blender():
     root_path = Path(vbgs.__file__).parent.parent
@@ -85,10 +94,14 @@ def show_habitat():
 
     # Load the trained model
     splat_path = "data/rooms/van-gogh-room_shuffle:True/nc:100000/randinit:True_reassign:True/model_199.json"
-    model = vbgs_model_to_splat(root_path / splat_path)
+    # model = vbgs_model_to_splat(root_path / splat_path)
+    mu, si, alpha = load_model(root_path / splat_path)
 
     i = 0
-    x_hat = render_img(model, cameras, i, 1, scale=2)
+    # x_hat = render_img(model, cameras, i, 1, scale=2)
+    x_hat = render_gsplat(
+        mu, si, alpha, 
+    )
     x = Image.open(data_iter._frames[i])
 
     fig, ax = plt.subplots(1, 2, figsize=(8, 4))

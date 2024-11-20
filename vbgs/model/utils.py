@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import json
+from pathlib import Path
 
 import jax.random as jr
 import jax.numpy as jnp
@@ -37,6 +38,22 @@ def store_model(model, data_params, filename, use_numpy=True):
         with open(filename, "w") as f:
             json.dump(model_dict, f, indent=2)
 
+def load_model(file_path):
+    '''Load a vbgs model.
+    
+    Introduced because we now store them either as a json or as a npz so this
+    allows for clean reading of both.
+    '''
+    file_path = Path(file_path)
+    if file_path.stem == 'json':
+        with open(file_path, "r") as jsonp:
+            model = json.load(jsonp)
+            mu = jnp.array(model["mu"])
+            si = jnp.array(model["si"])
+            alpha = jnp.array(model["alpha"])
+        return mu, si, alpha
+    model = jnp.load(file_path)
+    return jnp.array(model["mu"]), jnp.array(model["si"]), jnp.array(model["alpha"])
 
 def random_mean_init(
     key, x, component_shape, event_shape, init_random=False, add_noise=True

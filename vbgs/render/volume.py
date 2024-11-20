@@ -79,13 +79,13 @@ def render_gsplat(mu, si, alpha, world_to_cams, intrinsics, height, width, devic
     )
 
 
-def render_img(model, cams, idx, bg=0, scale=1.41):
-    custom_cam = loadCam(cargs, id=0, cam_info=cams[idx], resolution_scale=1.0)
-    net_image = render_cuda(
-        custom_cam, model, pipe, bg * torch.ones(3).to("cuda:0"), scale
-    )["render"]
-    img_ours_cu = net_image.detach().cpu().permute(1, 2, 0).numpy()
-    return img_ours_cu.clip(0, 1)
+# def render_img(model, cams, idx, bg=0, scale=1.41):
+#     custom_cam = loadCam(cargs, id=0, cam_info=cams[idx], resolution_scale=1.0)
+#     net_image = render_cuda(
+#         custom_cam, model, pipe, bg * torch.ones(3).to("cuda:0"), scale
+#     )["render"]
+#     img_ours_cu = net_image.detach().cpu().permute(1, 2, 0).numpy()
+#     return img_ours_cu.clip(0, 1)
 
 
 def rot_mat_to_quat(m):
@@ -132,53 +132,29 @@ def construct_covariance(lower, device="cuda:0"):
     return cov
 
 
-def mu_si_alpha_to_3dgs(mu, si, alpha, dtype=torch.float32, device="cuda:0"):
-    scaling, rotation = covariance_to_scaling_rotation(si[:, :3, :3])
-    mask = scaling.sum(axis=-1) > -1
+# def vbgs_model_to_splat(model_path, device="cuda:0", dtype=torch.float32):
+#     with open(model_path, "r") as f:
+#         d = json.load(f)
 
-    model = GaussianModel(3)
-    model.max_sh_degree = 0
-    model._xyz = torch.tensor(mu[:, :3], dtype=dtype, device=device)
-    model._features_dc = torch.tensor(
-        RGB2SH(mu[mask, 3:].clip(0, 1)), dtype=dtype, device=device
-    ).unsqueeze(1)
-    model._features_rest = torch.empty(0).to(device=device, dtype=dtype)
-    model._opacity = torch.tensor(
-        (alpha[mask] > 0.001), dtype=dtype, device=device
-    )
-    model.opacity_activation = lambda x: x
-    model._scaling = torch.tensor(scaling[mask], dtype=dtype, device=device)
-    model.scaling_activation = lambda x: x
-    model._rotation = torch.tensor(rotation[mask], dtype=dtype, device=device)
-    model.rotation_activation = lambda x: x
-    return model
+#     mu, si = np.array(d["mu"]), np.array(d["si"])
+#     alpha = np.array(d["alpha"])
 
+#     scaling, rotation = covariance_to_scaling_rotation(si[:, :3, :3])
+#     mask = scaling.sum(axis=-1) > -1
 
-def vbgs_model_to_splat(
-    model_path, device="cuda:0", dtype=torch.float32, params=None
-):
-    if "json" in str(model_path):
-        with open(model_path, "r") as f:
-            d = json.load(f)
-    else:
-        d = jnp.load(model_path)
-
-    mu, si = np.array(d["mu"]), np.array(d["si"])
-    alpha = np.array(d["alpha"])
-
-    # To apply a transform on the params if wanted. Note they are typically
-    # stored without transform. This is added to undo a bug where they were
-    # incorrectly tranfsormed for storing
-    if params is not None:
-        mu, si = jax.vmap(
-            partial(
-                transform_mvn,
-                params["stdevs"].flatten(),
-                params["offset"].flatten(),
-            )
-        )(jnp.array(mu), jnp.array(si))
-        mu = np.array(mu)
-        si = np.array(si)
-
-    model = mu_si_alpha_to_3dgs(mu, si, alpha, device=device, dtype=dtype)
-    return model
+#     model = GaussianModel(3)
+#     model.max_sh_degree = 0
+#     model._xyz = torch.tensor(mu[:, :3], dtype=dtype, device=device)
+#     model._features_dc = torch.tensor(
+#         RGB2SH(mu[mask, 3:].clip(0, 1)), dtype=dtype, device=device
+#     ).unsqueeze(1)
+#     model._features_rest = torch.empty(0).to(device=device, dtype=dtype)
+#     model._opacity = torch.tensor(
+#         (alpha[mask] > 0.000001), dtype=dtype, device=device
+#     )
+#     model.opacity_activation = lambda x: x
+#     model._scaling = torch.tensor(scaling[mask], dtype=dtype, device=device)
+#     model.scaling_activation = lambda x: x
+#     model._rotation = torch.tensor(rotation[mask], dtype=dtype, device=device)
+#     model.rotation_activation = lambda x: x
+#     return model
