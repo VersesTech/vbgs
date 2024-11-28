@@ -38,14 +38,15 @@ def store_model(model, data_params, filename, use_numpy=True):
         with open(filename, "w") as f:
             json.dump(model_dict, f, indent=2)
 
+
 def load_model(file_path):
-    '''Load a vbgs model.
-    
+    """Load a vbgs model.
+
     Introduced because we now store them either as a json or as a npz so this
     allows for clean reading of both.
-    '''
+    """
     file_path = Path(file_path)
-    if file_path.stem == 'json':
+    if file_path.suffix == ".json":
         with open(file_path, "r") as jsonp:
             model = json.load(jsonp)
             mu = jnp.array(model["mu"])
@@ -54,6 +55,7 @@ def load_model(file_path):
         return mu, si, alpha
     model = jnp.load(file_path)
     return jnp.array(model["mu"]), jnp.array(model["si"]), jnp.array(model["alpha"])
+
 
 def random_mean_init(
     key, x, component_shape, event_shape, init_random=False, add_noise=True
@@ -74,18 +76,14 @@ def random_mean_init(
         mean_init = mean_init.at[:, -3:].set(0)
     else:
         # Initialize the components around the points from the data
-        idcs = jr.randint(
-            param_init_key, component_shape, minval=0, maxval=len(x)
-        )
+        idcs = jr.randint(param_init_key, component_shape, minval=0, maxval=len(x))
 
         mean_init = jnp.zeros(component_shape + event_shape)
         mean_init = mean_init.at[:].set(x[idcs].reshape((-1, *event_shape)))
 
     if add_noise:
         key, subkey = jr.split(param_init_key)
-        mean_init = (
-            mean_init + jr.normal(subkey, shape=mean_init.shape) * 0.025
-        )
+        mean_init = mean_init + jr.normal(subkey, shape=mean_init.shape) * 0.025
 
     return mean_init
 

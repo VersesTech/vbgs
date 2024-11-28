@@ -39,7 +39,7 @@ sys.path.append(str(root_path / "../gaussian-splatting"))
 # from utils.camera_utils import loadCam
 # from arguments import PipelineParams
 # from gaussian_renderer import render as render_cuda
-# 
+#
 # from utils.sh_utils import RGB2SH, SH2RGB
 from functools import partial
 
@@ -55,11 +55,27 @@ class CustomArgs:
 cargs = CustomArgs()
 
 
+def render_gsplat(
+    mu, si, alpha, world_to_cams, intrinsics, height, width, device="cuda:0"
+):
+    """Uses the gsplats rasterization code to render a vbgs splat.
 
-def render_gsplat(mu, si, alpha, world_to_cams, intrinsics, height, width, device="cuda:0"):
+    Args:
+        mu: The 6D means of the gaussians. [N, 6]
+        si: The corresponding covariances of the gaussians. [N, 6, 6]
+        world_to_cams: A sequence of camera poses to render from [K, 4, 4]
+        intrinsics: Camera intrinsics, or a single one [<K>, 3, 3]
+        height: The desired frame height
+        width: The desired frame width
+        device: The torch device to run this on.
+    """
+    if len(intrinsics.shape) < 3:
+        intrinsics = intrinsics[None, ...]
+    if len(intrinsics) != len(world_to_cams):
+        intrinsics = jnp.repeat(intrinsics, len(world_to_cams), 0)
     jax_to_torch = lambda x: torch.tensor(np.array(x)).to(device)
-    
-    scales, quats = covariance_to_scaling_rotation(si[:, :3,  :3])
+
+    scales, quats = covariance_to_scaling_rotation(si[:, :3, :3])
     scales, quats = jax_to_torch(scales), jax_to_torch(quats)
     colors = jax_to_torch(mu[:, 3:])
     center_points = jax_to_torch(mu[:, :3])
@@ -75,7 +91,7 @@ def render_gsplat(mu, si, alpha, world_to_cams, intrinsics, height, width, devic
         world_to_cams,
         intrinsics,
         width,
-        height
+        height,
     )
 
 

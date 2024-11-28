@@ -46,9 +46,7 @@ def fit_continual(
     if key is None:
         key = jr.PRNGKey(0)
 
-    data_iter = BlenderDataIterator(
-        data_path, data_params=None, subsample=subsample
-    )
+    data_iter = BlenderDataIterator(data_path, data_params=None, subsample=subsample)
     if not init_random:
         # Essentially, if not init random, we load n_components points from the
         # point cloud, to initialize the model components on. Then we can just
@@ -116,12 +114,10 @@ def fit_continual(
 
         store_model(model, data_params, f"model_{step:02d}.json")
 
-    return metrics
+    return model, metrics, data_params
 
 
-def run_experiment(
-    key, data_path, n_components, subsample, init_random, batch_size
-):
+def run_experiment(key, data_path, n_components, subsample, init_random, batch_size):
     # Fit continual VBEM
     key, subkey = jr.split(key)
     fit_continual(
