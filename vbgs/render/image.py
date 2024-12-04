@@ -58,7 +58,7 @@ def render_patch(uv, mean, covariance, alpha):
 
     rgb = mean[:, -3:, 0]
     pix = (pdf_i * rgb).sum(axis=1)
-    return jnp.clip(pix, 0, 1).reshape(*uv.shape[:2], 3)
+    return pix.reshape(*uv.shape[:2], 3)
 
 
 def render_img(mean, cova, alpha, shape, patch_size=100):

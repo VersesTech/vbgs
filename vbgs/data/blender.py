@@ -46,20 +46,26 @@ class BlenderDataIterator:
         with open(data_path / file) as f:
             data = json.load(f)
 
-        shape = jnp.array(
-            Image.open(data_path / f"{data['frames'][0]['file_path']}.png")
-        ).shape
+        color_path = data["frames"][0]["file_path"]
+        if ".png" not in color_path:
+            color_path += ".png"
+
+        shape = jnp.array(Image.open(data_path / color_path)).shape
+
+        print(data.keys())
 
         # For the blender dataset fx = fy
         angle_x = data["camera_angle_x"]
-        fx = shape[0] / (2 * jnp.tan(angle_x / 2))
+        fx = shape[1] / (2 * jnp.tan(angle_x / 2))
         fy = fx
         intrinsics = jnp.eye(4)
         intrinsics = intrinsics.at[0, 0].set(fx)
         intrinsics = intrinsics.at[1, 1].set(fy)
-        intrinsics = intrinsics.at[:2, 2].set(shape[0] / 2)
+        intrinsics = intrinsics.at[0, 2].set(shape[1] / 2 - 0.5)
+        intrinsics = intrinsics.at[1, 2].set(shape[0] / 2 - 0.5)
 
         self._intrinsics = intrinsics
+
         self._frames = data["frames"]
         self._index = 0
         self._r = self._compute_distance_to_depth(angle_x, shape)
@@ -72,7 +78,7 @@ class BlenderDataIterator:
         uv = jnp.meshgrid(jnp.arange(shape[0]), jnp.arange(shape[1]))
         uv = jnp.concatenate(
             [jnp.expand_dims(u, -1) for u in uv]
-            + [jnp.ones(shape=(*shape[:2], 1))],
+            + [jnp.ones(shape=(shape[1], shape[0], 1))],
             axis=-1,
         )
         uv = uv - shape[0] / 2
@@ -102,17 +108,24 @@ class BlenderDataIterator:
 
     def _compute_cloud(self, i):
         frame = self._frames[i]
-        color_path = f"{frame['file_path']}.png"
-        depth_path = f"{frame['file_path']}_depth_*.png"
+        color_path = frame["file_path"]
+        if ".png" not in color_path:
+            color_path += ".png"
 
-        depth_path = list(self._data_path.glob(depth_path))[0]
+        depth_path = frame.get("depth_path", None)
+        if depth_path is None:
+            depth_path = f"{frame['file_path']}_depth_*.png"
+            depth_path = list(self._data_path.glob(depth_path))[0]
+
+            # Depth image processing specific to blender dataset
+            depth_im = jnp.array(Image.open(depth_path))
+            depth = 8 * (1.0 - (depth_im[..., 0] / 255.0))
+            depth *= self._r
+            depth *= depth_im[..., 0] > 0
+        else:
+            depth = jnp.array(Image.open(depth_path)) / 5000
 
         color = jnp.array(Image.open(self._data_path / color_path))
-
-        depth_im = jnp.array(Image.open(depth_path))
-        depth = 8 * (1.0 - (depth_im[..., 0] / 255.0))
-        depth *= self._r
-        depth *= depth_im[..., 0] > 0
 
         camera_to_world = np.array(frame["transform_matrix"])
 

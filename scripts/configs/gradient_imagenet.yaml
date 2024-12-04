@@ -1,0 +1,17 @@
+seed: 0
+device: 1
+experiment_name: imagenet-benchmark-gradient-lr0_1
+model:
+  n_components: 5_000
+  fixed_depth: True
+  init_on_data: False
+train:
+  lr: 0.1
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: data/${experiment_name}/init_on_data:${model.init_on_data}/${model.n_components}_fd:${model.fixed_depth}
+  sweep:
+    dir: data/sweep/${experiment_name}/init_on_data:${model.init_on_data}/${model.n_components}_fd:${model.fixed_depth}
+    subdir: ""
