@@ -29,7 +29,7 @@ from vbgs.model.utils import transform_mvn
 root_path = Path(vbgs.__file__).parent.parent
 
 # Gaussian splatting imports
-import torch
+import jaxsplat as jsplat
 from argparse import ArgumentParser
 
 sys.path.append(str(root_path / "../gaussian-splatting"))
@@ -52,46 +52,56 @@ class CustomArgs:
     data_device = "cuda:0"
 
 
-cargs = CustomArgs()
+# cargs = CustomArgs()
 
 
 def render_gsplat(
-    mu, si, alpha, world_to_cams, intrinsics, height, width, device="cuda:0"
+    mu,
+    si,
+    alpha,
+    world_to_cam,
+    intrinsics,
+    height,
+    width,
+    bg=None,
+    glob_scale=1.0,
+    clip_thresh=0.01,
+    block_size=16,
+    device="cuda:0",
 ):
     """Uses the gsplats rasterization code to render a vbgs splat.
 
     Args:
         mu: The 6D means of the gaussians. [N, 6]
         si: The corresponding covariances of the gaussians. [N, 6, 6]
-        world_to_cams: A sequence of camera poses to render from [K, 4, 4]
-        intrinsics: Camera intrinsics, or a single one [<K>, 3, 3]
+        world_to_cams: A sequence of camera poses to render from [4, 4]
+        intrinsics: Camera intrinsics, or a single one [3, 3]
         height: The desired frame height
         width: The desired frame width
         device: The torch device to run this on.
     """
-    if len(intrinsics.shape) < 3:
-        intrinsics = intrinsics[None, ...]
-    if len(intrinsics) != len(world_to_cams):
-        intrinsics = jnp.repeat(intrinsics, len(world_to_cams), 0)
-    jax_to_torch = lambda x: torch.tensor(np.array(x)).to(device)
 
     scales, quats = covariance_to_scaling_rotation(si[:, :3, :3])
-    scales, quats = jax_to_torch(scales), jax_to_torch(quats)
-    colors = jax_to_torch(mu[:, 3:])
-    center_points = jax_to_torch(mu[:, :3])
-    world_to_cams = jax_to_torch(world_to_cams)
-    intrinsics = jax_to_torch(intrinsics)
-
-    return rasterization(
-        center_points,
-        quats,
-        scales,
-        alpha,
-        colors,
-        world_to_cams,
-        intrinsics,
-        width,
-        height,
+    colors = mu[:, 3:]
+    center_points = mu[:, :3]
+    c = int(intrinsics[0, 2]), int(intrinsics[1, 2])
+    f = float(intrinsics[0, 0]), float(intrinsics[1, 0])
+    if bg is None:
+        bg = jnp.zeros(3)
+    return jsplat.render(
+        center_points.astype(jnp.float32),
+        scales.astype(jnp.float32),
+        quats.astype(jnp.float32),
+        colors.astype(jnp.float32),
+        alpha[..., None].astype(jnp.float32),
+        viewmat=world_to_cam.astype(jnp.float32),
+        background=bg.astype(jnp.float32),
+        img_shape=(height, width),
+        glob_scale=glob_scale,
+        f=f,
+        c=c,
+        clip_thresh=clip_thresh,
+        block_size=block_size,
     )
 
 
