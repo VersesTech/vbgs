@@ -67,7 +67,6 @@ def render_gsplat(
     glob_scale=1.0,
     clip_thresh=0.01,
     block_size=16,
-    device="cuda:0",
 ):
     """Uses the gsplats rasterization code to render a vbgs splat.
 
@@ -93,7 +92,8 @@ def render_gsplat(
         scales.astype(jnp.float32),
         quats.astype(jnp.float32),
         colors.astype(jnp.float32),
-        alpha[..., None].astype(jnp.float32),
+        # alpha[..., None].astype(jnp.float32),
+        jnp.ones((len(center_points), 1), dtype=jnp.float32),
         viewmat=world_to_cam.astype(jnp.float32),
         background=bg.astype(jnp.float32),
         img_shape=(height, width),
