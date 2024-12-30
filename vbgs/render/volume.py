@@ -52,9 +52,6 @@ class CustomArgs:
     data_device = "cuda:0"
 
 
-# cargs = CustomArgs()
-
-
 def render_gsplat(
     mu,
     si,
@@ -77,14 +74,14 @@ def render_gsplat(
         intrinsics: Camera intrinsics, or a single one [3, 3]
         height: The desired frame height
         width: The desired frame width
-        device: The torch device to run this on.
     """
 
     scales, quats = covariance_to_scaling_rotation(si[:, :3, :3])
     colors = mu[:, 3:]
     center_points = mu[:, :3]
     c = int(intrinsics[0, 2]), int(intrinsics[1, 2])
-    f = float(intrinsics[0, 0]), float(intrinsics[1, 0])
+    f = float(intrinsics[0, 0]), float(intrinsics[1, 1])
+    alpha = alpha[..., None] > 0.01
     if bg is None:
         bg = jnp.zeros(3)
     return jsplat.render(
@@ -92,8 +89,7 @@ def render_gsplat(
         scales.astype(jnp.float32),
         quats.astype(jnp.float32),
         colors.astype(jnp.float32),
-        # alpha[..., None].astype(jnp.float32),
-        jnp.ones((len(center_points), 1), dtype=jnp.float32),
+        alpha.astype(jnp.float32),
         viewmat=world_to_cam.astype(jnp.float32),
         background=bg.astype(jnp.float32),
         img_shape=(height, width),
@@ -103,15 +99,6 @@ def render_gsplat(
         clip_thresh=clip_thresh,
         block_size=block_size,
     )
-
-
-# def render_img(model, cams, idx, bg=0, scale=1.41):
-#     custom_cam = loadCam(cargs, id=0, cam_info=cams[idx], resolution_scale=1.0)
-#     net_image = render_cuda(
-#         custom_cam, model, pipe, bg * torch.ones(3).to("cuda:0"), scale
-#     )["render"]
-#     img_ours_cu = net_image.detach().cpu().permute(1, 2, 0).numpy()
-#     return img_ours_cu.clip(0, 1)
 
 
 def rot_mat_to_quat(m):
