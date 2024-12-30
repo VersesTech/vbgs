@@ -22,34 +22,16 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 from jax.scipy.spatial.transform import Rotation
+import jaxsplat as jsplat
 
 import vbgs
 from vbgs.model.utils import transform_mvn
 
 root_path = Path(vbgs.__file__).parent.parent
 
-# Gaussian splatting imports
-import jaxsplat as jsplat
-from argparse import ArgumentParser
 
-sys.path.append(str(root_path / "../gaussian-splatting"))
-# from scene.gaussian_model import GaussianModel
-# from gaussian_renderer import render, network_gui
-# from scene.dataset_readers import readCamerasFromTransforms, CameraInfo
-# from utils.camera_utils import loadCam
-# from arguments import PipelineParams
-# from gaussian_renderer import render as render_cuda
-#
-# from utils.sh_utils import RGB2SH, SH2RGB
-from functools import partial
-
-parser = ArgumentParser(description="Training script parameters")
-# pipe = PipelineParams(parser)
-
-
-class CustomArgs:
-    resolution = -1
-    data_device = "cuda:0"
+def nerf_cam_to_world(cam):
+    return jnp.linalg.inv(cam.at[:3, 1:3].set(cam[:3, 1:3] * -1))
 
 
 def render_gsplat(
@@ -70,10 +52,12 @@ def render_gsplat(
     Args:
         mu: The 6D means of the gaussians. [N, 6]
         si: The corresponding covariances of the gaussians. [N, 6, 6]
-        world_to_cams: A sequence of camera poses to render from [4, 4]
-        intrinsics: Camera intrinsics, or a single one [3, 3]
+        alpha: The assignments. [N]
+        world_to_cam: A camera pose to render from. [4, 4]
+        intrinsics: Camera intrinsics. [3, 3]
         height: The desired frame height
         width: The desired frame width
+        bg: [Optional] The backgroundcolor, will be black if unset.
     """
 
     scales, quats = covariance_to_scaling_rotation(si[:, :3, :3])
@@ -128,46 +112,3 @@ def covariance_to_scaling_rotation(covariance):
     # Convert to quaternion
     wxyz = jax.vmap(rot_mat_to_quat)(rotation)
     return np.array(scales), np.array(wxyz)
-
-
-def construct_covariance(lower, device="cuda:0"):
-    cov = torch.zeros((lower.shape[0], 3, 3), device=device)
-
-    # fill in lower triangle
-    cov[:, 0:3, 0] = lower[:, :3]
-    cov[:, 1:3, 1] = lower[:, 3:5]
-    cov[:, 2:3, 2] = lower[:, 5:]
-
-    # make symmetrical
-    cov[:, 0, 1:3] = cov[:, 1:3, 0]
-    cov[:, 1, 2] = cov[:, 2, 1]
-
-    return cov
-
-
-# def vbgs_model_to_splat(model_path, device="cuda:0", dtype=torch.float32):
-#     with open(model_path, "r") as f:
-#         d = json.load(f)
-
-#     mu, si = np.array(d["mu"]), np.array(d["si"])
-#     alpha = np.array(d["alpha"])
-
-#     scaling, rotation = covariance_to_scaling_rotation(si[:, :3, :3])
-#     mask = scaling.sum(axis=-1) > -1
-
-#     model = GaussianModel(3)
-#     model.max_sh_degree = 0
-#     model._xyz = torch.tensor(mu[:, :3], dtype=dtype, device=device)
-#     model._features_dc = torch.tensor(
-#         RGB2SH(mu[mask, 3:].clip(0, 1)), dtype=dtype, device=device
-#     ).unsqueeze(1)
-#     model._features_rest = torch.empty(0).to(device=device, dtype=dtype)
-#     model._opacity = torch.tensor(
-#         (alpha[mask] > 0.000001), dtype=dtype, device=device
-#     )
-#     model.opacity_activation = lambda x: x
-#     model._scaling = torch.tensor(scaling[mask], dtype=dtype, device=device)
-#     model.scaling_activation = lambda x: x
-#     model._rotation = torch.tensor(rotation[mask], dtype=dtype, device=device)
-#     model.rotation_activation = lambda x: x
-#     return model

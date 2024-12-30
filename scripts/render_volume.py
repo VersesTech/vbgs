@@ -25,15 +25,14 @@ import jax.numpy as jnp
 from vbgs.model.utils import load_model
 from vbgs.data.blender import BlenderDataIterator
 from vbgs.data.replica import ReplicaDataIterator
-from vbgs.render.volume import (
-    # readCamerasFromTransforms,
-    render_gsplat,
-)
+from vbgs.render.volume import render_gsplat, nerf_cam_to_world
+
 
 from vbgs.data.habitat import HabitatDataIterator
 
 
 def show_replica():
+    # TODO check if this is correct.
     root_path = Path(vbgs.__file__).parent.parent
     data_path = Path("/home/shared/Replica/room0")
     model_path = Path("/home/shared/vbgs-results/room0_trained.npz")
@@ -47,36 +46,35 @@ def show_replica():
 
 def show_blender():
     root_path = Path(vbgs.__file__).parent.parent
-    # blender_data_path = root_path / "../../data/blender/lego"
     blender_data_path = (root_path / "../data/blender/lego").resolve()
-    # load the data in our format
+    # Load the data in our format.
     data_iter = BlenderDataIterator(blender_data_path, "transforms_val.json")
     rich.print(data_iter._frames[0])
 
     # Load the cameras in the gaussian-splatting format
-    # cameras = readCamerasFromTransforms(
-    #     blender_data_path, "transforms_val.json", True
-    # )
     with open(blender_data_path / "transforms_val.json") as f:
         transforms_val = json.load(f)
-        cameras = jnp.array([x["transform_matrix"] for x in transforms_val["frames"]])
-    # Load the trained model
+        cam_to_worlds = jnp.array(
+            [nerf_cam_to_world(x["transform_matrix"]) for x in transforms_val["frames"]]
+        )
+    # Load the trained model.
     splat_path = (
         "data/blender-dataset/lego/nc:10000/subs:None_randinit:True/model_12.json"
     )
-    # model = vbgs_model_to_splat(root_path / splat_path)
+    i = 0
     mu, si, alpha = load_model(root_path / splat_path)
     x_hat = render_gsplat(
         mu,
         si,
         alpha,
-        cameras[0],
+        cam_to_worlds[i],
         data_iter._intrinsics,
-        480,
-        640,
+        800,
+        800,
+        bg=jnp.ones(3),
+        clip_thresh=1e-4,
     )
-    i = 0
-    # x_hat = render_img(model, cameras, i, 1)
+
     x = Image.open(str(blender_data_path / data_iter._frames[i]["file_path"]) + ".png")
 
     fig, ax = plt.subplots(1, 2, figsize=(8, 4))
@@ -103,25 +101,14 @@ def show_habitat():
     data_iter = HabitatDataIterator(habitat_data_path, "", None)
     rich.print(data_iter._frames[0])
 
-    # Load the cameras in the gaussian-splatting format
-    cameras = readCamerasFromTransforms(
-        root_path / "resources/large-datasets/van-gogh-room",
-        "transforms_eval_200.json",
-        True,
-    )
-
     # Load the trained model
     splat_path = "data/rooms/van-gogh-room_shuffle:True/nc:100000/randinit:True_reassign:True/model_199.json"
-    # model = vbgs_model_to_splat(root_path / splat_path)
     mu, si, alpha = load_model(root_path / splat_path)
 
     i = 0
-    # x_hat = render_img(model, cameras, i, 1, scale=2)
-    x_hat = render_gsplat(
-        mu,
-        si,
-        alpha,
-    )
+    intrinsics, cam_to_world = data_iter.get_camera_params(i)
+    # TODO check this with a working habitat model
+    x_hat = render_gsplat(mu, si, alpha, cam_to_world, intrinsics, 800, 800)
     x = Image.open(data_iter._frames[i])
 
     fig, ax = plt.subplots(1, 2, figsize=(8, 4))
@@ -138,4 +125,4 @@ def show_habitat():
 
 if __name__ == "__main__":
     show_blender()
-    # show_habitat()
+    show_habitat()
