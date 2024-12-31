@@ -156,6 +156,10 @@ class HabitatDataIterator:
 
         return data
 
+    def get_camera_params(self, index):
+        im = self._frames[index]
+        return load_camera_params(im)
+
     def __len__(self):
         return len(self._frames)
 

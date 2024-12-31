@@ -8,7 +8,7 @@ model:
   scale: ${model.n_components}
 data: 
   model_name: lego
-  data_path: ../../data/blender/${data.model_name}
+  data_path: /home/shared/blender/${data.model_name}
   subsample_factor: null
 train: 
   batch_size: 5_00
