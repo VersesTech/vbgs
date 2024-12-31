@@ -21,7 +21,6 @@ from pathlib import Path
 
 import jax
 import jax.numpy as jnp
-from jax.scipy.spatial.transform import Rotation
 import jaxsplat as jsplat
 
 import vbgs
