@@ -1,6 +1,6 @@
 seed: 0
 device: 1
-experiment_name: replica_rooms_low_rf
+experiment_name: cloud_creation_to_delete
 model: 
   n_components: 100_000
   init_random: True

@@ -52,13 +52,44 @@ from PIL import Image
 from vbgs.metrics import calc_psnr, calc_mse
 import matplotlib.pyplot as plt
 
+from plyfile import PlyData, PlyElement
 
-def evaluate(model, cameras, store_path, scale=1.4):
+
+def store_ply(path, xyz, rgb):
+    # Make sure rgb is an uint8 (we might push in floats).
+    if np.issubdtype(rgb.dtype, np.floating):
+        rgb = (rgb * 255).astype("u1")
+
+    # Define the dtype for the structured array.
+    dtype = [
+        ("x", "f4"),
+        ("y", "f4"),
+        ("z", "f4"),
+        ("nx", "f4"),
+        ("ny", "f4"),
+        ("nz", "f4"),
+        ("red", "u1"),
+        ("green", "u1"),
+        ("blue", "u1"),
+    ]
+
+    normals = np.zeros_like(xyz)
+
+    attributes = np.concatenate((xyz, normals, rgb), axis=1)
+    elements = np.array(list(map(tuple, attributes)), dtype=dtype)
+
+    # Create the PlyData object and write to file
+    vertex_element = PlyElement.describe(elements, "vertex")
+    ply_data = PlyData([vertex_element])
+    ply_data.write(path)
+
+
+def evaluate(model, cameras, store_path):
     psnrs = []
     mses = []
     for i in range(len(cameras)):
         x = np.array(Image.open(cameras[i].image_path)) / 255.0
-        x_hat = render_img(model, cameras, i, 0, scale=scale)
+        x_hat = render_img(model, cameras, i, 0, scale=1.4)
 
         psnrs.append(calc_psnr(x, x_hat))
         mses.append(calc_mse(x, x_hat))
@@ -141,73 +172,14 @@ def fit_continual(
         add_noise=True,
     )
 
-    del x_data
+    s = data_params["stdevs"]
+    o = data_params["offset"]
+    xi = mean_init[..., 0] * s + o
 
-    key, subkey = jr.split(key)
-    prior_model = get_volume_delta_mixture(
-        key=subkey,
-        n_components=n_components,
-        mean_init=mean_init,
-        beta=0,
-        learning_rate=1,
-        dof_offset=1,
-        position_scale=n_components,
-        position_event_shape=(3, 1),
-    )
-
-    model = copy.deepcopy(prior_model)
-
-    metrics = dict(
-        {"psnr": {"mean": [], "std": []}, "mse": {"mean": [], "std": []}}
-    )
-    prior_stats, space_stats, color_stats = None, None, None
-    for step, x in tqdm(enumerate(data_iter), total=len(data_iter)):
-        prior_model = reassign_fn(
-            prior_model, model, x, batch_size, reassign_fraction
-        )
-        model, prior_stats, space_stats, color_stats = fit_gmm_step(
-            prior_model,
-            model,
-            data=x[::4],
-            batch_size=batch_size,
-            prior_stats=prior_stats,
-            space_stats=space_stats,
-            color_stats=color_stats,
-        )
-
-        if step % eval_every == 0:
-            store_model(
-                model, data_params, f"model_{step:02d}.npz", use_numpy=True
-            )
-            p, m = evaluate(
-                vbgs_model_to_splat(
-                    f"model_{step:02d}.npz", device=torch_device
-                ),
-                eval_cameras,
-                f"results_{step:02d}.npz",
-            )
-
-            metrics["psnr"]["mean"].append(p.mean())
-            metrics["psnr"]["std"].append(p.std())
-            metrics["mse"]["mean"].append(m.mean())
-            metrics["mse"]["std"].append(m.std())
-
-            if step % 10 == 0:
-                print(f"PSNR: {p.mean():.2f} +- {p.std():.2f}")
-
-    fig, ax = plt.subplots(1, 2, figsize=(8, 4))
-    for i, (k, v) in enumerate(metrics.items()):
-        y, std = np.array(metrics[k]["mean"]), np.array(metrics[k]["std"])
-        ax[i].plot(y, label=k)
-        ax[i].fill_between(
-            np.arange(len(y)), y - 1.96 * std, y + 1.96 * std, alpha=0.25
-        )
-    plt.legend()
-    plt.savefig("metrics.png")
-
-    # Make sure the final model is stored as well
-    store_model(model, data_params, f"model_{step:02d}.json")
-    return metrics
+    scene = data_path.name
+    print(scene)
+    p = Path(f"/home/shared/Replica-blender/{scene}") / "100K_initial_pts.ply"
+    store_ply(p, xi[:, :3], (xi[:, 3:] * 255).astype(np.uint8))
 
 
 def run_experiment(
