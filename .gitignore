@@ -163,3 +163,6 @@ cython_debug/
 
 /data/*
 /resources/
+
+tmp-experiments/
+scripts/data/

@@ -16,6 +16,8 @@
 
 import numpy as np
 
+import matplotlib.pyplot as plt
+
 
 def calc_mse(x, y):
     if x.max() <= 1:
@@ -33,4 +35,4 @@ def calc_psnr(x, y):
         y = y * 255
 
     mse_ = calc_mse(x, y)
-    return 20 * np.log10(254 / np.sqrt(mse_))
+    return 20.0 * np.log10(254.0 / np.sqrt(mse_))

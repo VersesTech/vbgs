@@ -27,6 +27,8 @@ import json
 from vbgs.camera import transform_uvd_to_points
 from vbgs.data.utils import normalize_data
 
+from vbgs.data.depth import load_depth_model, predict_depth
+
 rot = np.eye(4)
 rot[1, 1] = -1
 rot[2, 2] = -1
@@ -35,14 +37,20 @@ rot[2, 2] = -1
 def load_camera_params(im_path):
     with open(str(im_path).replace(".jpeg", "_camera_params.json"), "r") as f:
         d = json.load(f)
+
     intrinsics = np.eye(4)
-    intrinsics[:3, :3] = np.array(d["camera_intrinsics"])
+    intrinsics[:3, :3] = np.array(d["camera_intrinsics"])[:3, :3]
 
     extrinsics = np.eye(4)
     extrinsics[:3, :3] = np.array(d["R_cam2world"])
     extrinsics[:3, -1] = d["t_cam2world"]
 
-    return intrinsics, extrinsics @ rot
+    if "habitat" in str(im_path):
+        extrinsics = extrinsics @ rot
+
+    depth_scale = d.get("scale", 1)
+
+    return intrinsics, extrinsics, depth_scale
 
 
 class TUMDataIterator:
@@ -76,32 +84,69 @@ class TUMDataIterator:
 
 
 class HabitatDataIterator:
-    def __init__(self, path, idx, data_params):
+    def __init__(
+        self,
+        path,
+        idx,
+        data_params,
+        estimate_depth=False,
+        device="cuda:0",
+        from_opengl=True,
+    ):
         path = Path(path)
         if idx == "":
-            self._frames = sorted(list(path.glob("*.jpeg")))
+            frames = list(path.glob("*.jpeg"))
+            frames = [f for f in frames if "depth" not in str(f)]
+            self._frames = sorted(
+                frames,
+                key=lambda x: int(str(x).replace(".jpeg", "").split("/")[-1]),
+            )
         else:
             self._frames = sorted(list(path.glob(f"{idx}_*.jpeg")))
         self._data_params = data_params
 
         self._index = 0
 
-    def _get_frame(self, index):
+        self._estimate_depth = estimate_depth
+        if self._estimate_depth:
+            self._depth_model = load_depth_model("dav2", device)
+
+        self._from_opengl = from_opengl
+
+    def _get_frame_rgbd(self, index):
         im = self._frames[index]
 
         rgb = cv2.imread(im)[..., [2, 1, 0]]
-        d = str(im).replace(".jpeg", "_depth.exr")
-        d = cv2.imread(d, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
 
-        intrinsics, extrinsics = load_camera_params(im)
+        intrinsics, extrinsics, depth_scale = load_camera_params(im)
+
+        if self._estimate_depth:
+            d = predict_depth(rgb, *self._depth_model)
+        else:
+            depth_path = str(im).replace(".jpeg", "_depth.exr")
+            if os.path.exists(depth_path):
+                d = cv2.imread(
+                    depth_path, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH
+                )
+            else:
+                d = str(im).replace(".jpeg", "_depth.jpeg")
+                d = cv2.imread(d, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+                d = d / 255.0
+
+            d = depth_scale * d
+
+        return rgb, d, intrinsics, extrinsics
+
+    def _get_frame(self, index):
+        rgb, d, intrinsics, extrinsics = self._get_frame_rgbd(index)
 
         points, rgb = transform_uvd_to_points(
             rgb,
             d,
             extrinsics,
             intrinsics,
-            from_opengl=True,
-            filter_zero=False,  # True
+            from_opengl=self._from_opengl,
+            filter_zero=False,
         )
 
         data = jnp.concatenate([points, rgb], axis=1)

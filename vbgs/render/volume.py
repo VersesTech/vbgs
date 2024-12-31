@@ -23,6 +23,7 @@ import jax
 import jax.numpy as jnp
 
 import vbgs
+from vbgs.model.utils import transform_mvn
 
 root_path = Path(vbgs.__file__).parent.parent
 
@@ -38,6 +39,8 @@ from arguments import PipelineParams
 from gaussian_renderer import render as render_cuda
 from argparse import ArgumentParser
 from utils.sh_utils import RGB2SH, SH2RGB
+
+from functools import partial
 
 
 parser = ArgumentParser(description="Training script parameters")
@@ -105,13 +108,7 @@ def construct_covariance(lower, device="cuda:0"):
     return cov
 
 
-def vbgs_model_to_splat(model_path, device="cuda:0", dtype=torch.float32):
-    with open(model_path, "r") as f:
-        d = json.load(f)
-
-    mu, si = np.array(d["mu"]), np.array(d["si"])
-    alpha = np.array(d["alpha"])
-
+def mu_si_alpha_to_3dgs(mu, si, alpha, dtype=torch.float32, device="cuda:0"):
     scaling, rotation = covariance_to_scaling_rotation(si[:, :3, :3])
     mask = scaling.sum(axis=-1) > -1
 
@@ -123,11 +120,41 @@ def vbgs_model_to_splat(model_path, device="cuda:0", dtype=torch.float32):
     ).unsqueeze(1)
     model._features_rest = torch.empty(0).to(device=device, dtype=dtype)
     model._opacity = torch.tensor(
-        (alpha[mask] > 0.000001), dtype=dtype, device=device
+        (alpha[mask] > 0.001), dtype=dtype, device=device
     )
     model.opacity_activation = lambda x: x
     model._scaling = torch.tensor(scaling[mask], dtype=dtype, device=device)
     model.scaling_activation = lambda x: x
     model._rotation = torch.tensor(rotation[mask], dtype=dtype, device=device)
     model.rotation_activation = lambda x: x
+    return model
+
+
+def vbgs_model_to_splat(
+    model_path, device="cuda:0", dtype=torch.float32, params=None
+):
+    if "json" in str(model_path):
+        with open(model_path, "r") as f:
+            d = json.load(f)
+    else:
+        d = jnp.load(model_path)
+
+    mu, si = np.array(d["mu"]), np.array(d["si"])
+    alpha = np.array(d["alpha"])
+
+    # To apply a transform on the params if wanted. Note they are typically
+    # stored without transform. This is added to undo a bug where they were
+    # incorrectly tranfsormed for storing
+    if params is not None:
+        mu, si = jax.vmap(
+            partial(
+                transform_mvn,
+                params["stdevs"].flatten(),
+                params["offset"].flatten(),
+            )
+        )(jnp.array(mu), jnp.array(si))
+        mu = np.array(mu)
+        si = np.array(si)
+
+    model = mu_si_alpha_to_3dgs(mu, si, alpha, device=device, dtype=dtype)
     return model
