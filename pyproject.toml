@@ -18,7 +18,7 @@ dependencies = [
     "ruff>=0.6.8",
     "tqdm>=4.66.5",
     "pybind11>=2.13",
-    "jaxsplat @ git+ssh://git@github.com/OzanCatalVerses/jaxsplat.git"
+    "jaxsplat @ git+ssh://git@github.com/VersesTech/jaxsplat.git"
 ]
 
 [project.optional-dependencies]

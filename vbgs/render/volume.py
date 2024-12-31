@@ -30,15 +30,15 @@ from vbgs.model.utils import transform_mvn
 root_path = Path(vbgs.__file__).parent.parent
 
 
-def nerf_cam_to_world(cam):
-    return jnp.linalg.inv(cam.at[:3, 1:3].set(cam[:3, 1:3] * -1))
+def opengl_to_colmap_frame(cam):
+    return cam.at[:3, 1:3].set(cam[:3, 1:3] * -1)
 
 
 def render_gsplat(
     mu,
     si,
     alpha,
-    world_to_cam,
+    cam_to_world,
     intrinsics,
     height,
     width,
@@ -46,6 +46,7 @@ def render_gsplat(
     glob_scale=1.0,
     clip_thresh=0.01,
     block_size=16,
+    from_opengl=True
 ):
     """Uses the gsplats rasterization code to render a vbgs splat.
 
@@ -53,7 +54,7 @@ def render_gsplat(
         mu: The 6D means of the gaussians. [N, 6]
         si: The corresponding covariances of the gaussians. [N, 6, 6]
         alpha: The assignments. [N]
-        world_to_cam: A camera pose to render from. [4, 4]
+        cam_to_world: A camera pose to render from. [4, 4]
         intrinsics: Camera intrinsics. [3, 3]
         height: The desired frame height
         width: The desired frame width
@@ -68,6 +69,10 @@ def render_gsplat(
     alpha = alpha[..., None] > 0.01
     if bg is None:
         bg = jnp.zeros(3)
+    if from_opengl:
+        cam_to_world = opengl_to_colmap_frame(cam_to_world)
+    
+    world_to_cam = jnp.linalg.inv(cam_to_world)
     return jsplat.render(
         center_points.astype(jnp.float32),
         scales.astype(jnp.float32),

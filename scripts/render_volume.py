@@ -25,28 +25,45 @@ import jax.numpy as jnp
 from vbgs.model.utils import load_model
 from vbgs.data.blender import BlenderDataIterator
 from vbgs.data.replica import ReplicaDataIterator
-from vbgs.render.volume import render_gsplat, nerf_cam_to_world
-
+from vbgs.render.volume import render_gsplat
+from vbgs.camera import opengl_to_frame
 
 from vbgs.data.habitat import HabitatDataIterator
+
 
 
 def show_replica():
     # TODO check if this is correct.
     root_path = Path(vbgs.__file__).parent.parent
     data_path = Path("/home/shared/Replica/room0")
-    model_path = Path("/home/shared/vbgs-results/room0_trained.npz")
+    # model_path = Path("/home/shared/vbgs-results/room0_trained.npz")
+    model_path = Path("/home/shared/vbgs-results/replica_rooms_low_rf/room0/nc:100000/randinit:True_reassign:True/model_199.npz")
     mu, si, alpha = load_model(model_path)
 
     data_iter = ReplicaDataIterator(data_path)
-    p0 = data_iter.poses[:200]
+    i = 100
+    p0 = data_iter.poses[i]
+    with Image.open(data_iter.get_frame(i)[0]) as img:
+        x = jnp.array(img)
+    
+    x_hat = render_gsplat(mu, si, alpha, p0, data_iter.intrinsics, *x.shape[:2])
+    fig, ax = plt.subplots(1, 2, figsize=(8, 4))
+    ax[0].imshow(x)
+    ax[0].set_title("Ground truth")
 
-    render_gsplat(mu, si, alpha, p0, data_iter.intrinsics, 640, 1200)
+    ax[1].imshow(x_hat)
+    ax[1].set_title("Predicted")
+
+    [a.set_xticks([]) for a in ax.flatten()]
+    [a.set_yticks([]) for a in ax.flatten()]
+    # plt.show()
+    plt.savefig("replica.png")
 
 
 def show_blender():
     root_path = Path(vbgs.__file__).parent.parent
-    blender_data_path = (root_path / "../data/blender/lego").resolve()
+    # blender_data_path = (root_path / "../data/blender/lego").resolve()
+    blender_data_path = Path("/home/shared/blender/lego")
     # Load the data in our format.
     data_iter = BlenderDataIterator(blender_data_path, "transforms_val.json")
     rich.print(data_iter._frames[0])
@@ -55,11 +72,11 @@ def show_blender():
     with open(blender_data_path / "transforms_val.json") as f:
         transforms_val = json.load(f)
         cam_to_worlds = jnp.array(
-            [nerf_cam_to_world(x["transform_matrix"]) for x in transforms_val["frames"]]
+            [x["transform_matrix"] for x in transforms_val["frames"]]
         )
     # Load the trained model.
     splat_path = (
-        "data/blender-dataset/lego/nc:10000/subs:None_randinit:True/model_12.json"
+        "data/blender-dataset/lego/nc:10000/subs:None_randinit:True/model_199.npz"
     )
     i = 0
     mu, si, alpha = load_model(root_path / splat_path)
@@ -87,7 +104,7 @@ def show_blender():
     [a.set_xticks([]) for a in ax.flatten()]
     [a.set_yticks([]) for a in ax.flatten()]
     # plt.show()
-    plt.savefig("output.png")
+    plt.savefig("blender.png")
 
 
 def show_habitat():
@@ -125,4 +142,5 @@ def show_habitat():
 
 if __name__ == "__main__":
     show_blender()
-    show_habitat()
+    # show_habitat()
+    show_replica()
