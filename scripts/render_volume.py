@@ -33,10 +33,8 @@ from vbgs.data.habitat import HabitatDataIterator
 
 
 def show_replica():
-    # TODO check if this is correct.
     root_path = Path(vbgs.__file__).parent.parent
     data_path = Path("/home/shared/Replica/room0")
-    # model_path = Path("/home/shared/vbgs-results/room0_trained.npz")
     model_path = Path("/home/shared/vbgs-results/replica_rooms_low_rf/room0/nc:100000/randinit:True_reassign:True/model_199.npz")
     mu, si, alpha = load_model(model_path)
 
@@ -62,7 +60,6 @@ def show_replica():
 
 def show_blender():
     root_path = Path(vbgs.__file__).parent.parent
-    # blender_data_path = (root_path / "../data/blender/lego").resolve()
     blender_data_path = Path("/home/shared/blender/lego")
     # Load the data in our format.
     data_iter = BlenderDataIterator(blender_data_path, "transforms_val.json")
