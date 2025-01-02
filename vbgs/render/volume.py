@@ -14,8 +14,6 @@
 # limitations under the License.
 
 import numpy as np
-import sys
-import json
 
 from pathlib import Path
 
@@ -24,7 +22,6 @@ import jax.numpy as jnp
 import jaxsplat as jsplat
 
 import vbgs
-from vbgs.model.utils import transform_mvn
 
 root_path = Path(vbgs.__file__).parent.parent
 
@@ -34,8 +31,8 @@ def opengl_to_colmap_frame(cam):
 
 
 def render_gsplat(
-    mu,
-    si,
+    mu, 
+    si, 
     alpha,
     cam_to_world,
     intrinsics,
@@ -59,7 +56,6 @@ def render_gsplat(
         width: The desired frame width
         bg: [Optional] The backgroundcolor, will be black if unset.
     """
-
     scales, quats = covariance_to_scaling_rotation(si[:, :3, :3])
     colors = mu[:, 3:]
     center_points = mu[:, :3]

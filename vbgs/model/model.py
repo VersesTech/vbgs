@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from functools import partial
+from collections import namedtuple
 
 import equinox
 
@@ -24,6 +25,9 @@ from vbgs.vi.conjugate.mvn import MultivariateNormal
 from vbgs.vi.models.mixture import Mixture
 
 from vbgs.model.utils import transform_mvn
+
+
+Splat = namedtuple("Splat", ["mu", "si", "alpha"])
 
 
 class DeltaMixture(equinox.Module):
@@ -94,3 +98,8 @@ class DeltaMixture(equinox.Module):
             )
 
         return mu, si
+
+    def extract_model(self, data_params):
+        mu, si = self.denormalize(data_params, clip_val=None)
+        alpha = self.prior.alpha.reshape(-1)
+        return Splat(mu, si, alpha)

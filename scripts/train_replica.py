@@ -35,30 +35,24 @@ from vbgs.data.utils import create_normalizing_params, normalize_data
 from vbgs.model.utils import random_mean_init, store_model
 from vbgs.model.train import fit_gmm_step
 
-# from vbgs.data.habitat import HabitatDataIterator
 from vbgs.data.replica import ReplicaDataIterator
 from vbgs.model.reassign import reassign
 
 
 from model_volume import get_volume_delta_mixture
 
-from vbgs.render.volume import (
-    readCamerasFromTransforms,
-    render_img,
-    vbgs_model_to_splat,
-)
+from vbgs.render.volume import render_gsplat
 
 from PIL import Image
 from vbgs.metrics import calc_psnr, calc_mse
 import matplotlib.pyplot as plt
 
-
-def evaluate(model, cameras, store_path, scale=1.4):
+def evaluate(splat, cameras, eval_frames, intrinsics, shape, store_path):
     psnrs = []
     mses = []
     for i in range(len(cameras)):
-        x = np.array(Image.open(cameras[i].image_path)) / 255.0
-        x_hat = render_img(model, cameras, i, 0, scale=scale)
+        x = np.array(Image.open(eval_frames[i])) / 255.0
+        x_hat = render_gsplat(*splat, cameras[i], intrinsics, *shape)
 
         psnrs.append(calc_psnr(x, x_hat))
         mses.append(calc_mse(x, x_hat))
@@ -81,10 +75,7 @@ def fit_continual(
     use_reassign=True,
     reassign_fraction=0.05,
     seed=0,
-    device=0,
 ):
-    # the torch stuff should always be on cuda:0
-    torch_device = "cuda:0"
     np.random.seed(seed)
     random.seed(seed)
 
@@ -93,22 +84,6 @@ def fit_continual(
 
     reassign_fn = reassign if use_reassign else no_reassign
 
-    # ====
-    eval_cameras = readCamerasFromTransforms(
-        Path(
-            str(data_path)
-            .replace(
-                "Replica", "Replica-blender"
-            )  # Go to the location of the blender transforms file
-            .replace(
-                "-depth_estimated", ""
-            )  # The depth estimated frames use the same validation set
-        ),
-        "transforms_eval.json",
-        True,
-    )[::2]  # Evaluate on 100 frames
-
-    # ============
     # Some subsampling
     x_data = None
     data_params = create_normalizing_params(
@@ -129,7 +104,10 @@ def fit_continual(
         print(data_params, end="\n\n")
 
     data_iter = ReplicaDataIterator(data_path, data_params)
-    data_iter.indices = np.arange(0, 2000, 10)
+    eval_cameras = [data_iter.load_camera_params(i)[1] for i in jnp.arange(0, len(data_iter), 2)]
+    eval_frames = [data_iter.get_frame(i)[0] for i in jnp.arange(0, len(data_iter), 2)]
+    # data_iter.indices = np.arange(0, 2000, 10)
+    data_iter.indices = np.arange(0, 2000, 400)
 
     key, subkey = jr.split(key)
     mean_init = random_mean_init(
@@ -178,14 +156,16 @@ def fit_continual(
         if step % eval_every == 0:
             store_model(
                 model, data_params, f"model_{step:02d}.npz", use_numpy=True
-            )
+            )            
             p, m = evaluate(
-                vbgs_model_to_splat(
-                    f"model_{step:02d}.npz", device=torch_device
-                ),
+                model.extract_model(data_params),
                 eval_cameras,
+                eval_frames,
+                data_iter.intrinsics,
+                (data_iter.h, data_iter.w),
                 f"results_{step:02d}.npz",
             )
+
 
             metrics["psnr"]["mean"].append(p.mean())
             metrics["psnr"]["std"].append(p.std())
@@ -230,7 +210,6 @@ def run_experiment(
         batch_size=batch_size,
         use_reassign=use_reassign,
         reassign_fraction=reassign_fraction,
-        device=device,
     )
     rich.print(metrics)
 
