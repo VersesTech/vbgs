@@ -107,6 +107,7 @@ def optimize_transform(
 
 
 def icp(source, target, cov_source, cov_target, assoc_iters=2, trans_iters=10):
+    """Calculate the transform mapping source onto target."""
     # Calculate initial guess.
     mean_source = jnp.mean(source, axis=0)
     mean_target = jnp.mean(target, axis=0)
@@ -116,6 +117,7 @@ def icp(source, target, cov_source, cov_target, assoc_iters=2, trans_iters=10):
     if jnp.linalg.det(R) < 0:
         # reflective case
         R = R.at[:3, 2].set(R[:3, 2] * -1)
+
     t = mean_target - R @ mean_source  # target = R @ source + t
     transform = jnp.eye(4).at[:3, :3].set(R).at[:3, 3].set(t)
     apply_transform = lambda t, x: (t @ jnp.ones(4).at[:3].set(x))[:3]
