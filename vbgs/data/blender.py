@@ -51,8 +51,7 @@ class BlenderDataIterator:
             color_path += ".png"
 
         shape = jnp.array(Image.open(data_path / color_path)).shape
-
-        print(data.keys())
+        self.h, self.w = shape[:2]
 
         # For the blender dataset fx = fy
         angle_x = data["camera_angle_x"]
@@ -64,7 +63,7 @@ class BlenderDataIterator:
         intrinsics = intrinsics.at[0, 2].set(shape[1] / 2 - 0.5)
         intrinsics = intrinsics.at[1, 2].set(shape[0] / 2 - 0.5)
 
-        self._intrinsics = intrinsics
+        self.intrinsics = intrinsics
 
         self._frames = data["frames"]
         self._index = 0
@@ -106,26 +105,35 @@ class BlenderDataIterator:
         else:
             raise StopIteration
 
-    def _compute_cloud(self, i):
-        frame = self._frames[i]
+    def load_camera_params(self, idx):
+        frame = self._frames[idx]
+        cam2world = jnp.array(frame["transform_matrix"])
+        return cam2world, self.intrinsics
+
+    def get_camera_frame(self, idx):
+        frame = self._frames[idx]
         color_path = frame["file_path"]
         if ".png" not in color_path:
             color_path += ".png"
+        color_image = jnp.array(Image.open(self._data_path / color_path)) * 1.0
 
         depth_path = frame.get("depth_path", None)
         if depth_path is None:
             depth_path = f"{frame['file_path']}_depth_*.png"
             depth_path = list(self._data_path.glob(depth_path))[0]
-
             # Depth image processing specific to blender dataset
             depth_im = jnp.array(Image.open(depth_path))
-            depth = 8 * (1.0 - (depth_im[..., 0] / 255.0))
-            depth *= self._r
-            depth *= depth_im[..., 0] > 0
+            depth_image = 8 * (1.0 - (depth_im[..., 0] / 255.0))
+            depth_image *= self._r
+            depth_image *= depth_im[..., 0] > 0
         else:
-            depth = jnp.array(Image.open(depth_path)) / 5000
+            depth_image = jnp.array(Image.open(depth_path)) / 5000
 
-        color = jnp.array(Image.open(self._data_path / color_path))
+        return color_image, depth_image
+
+    def _compute_cloud(self, i):
+        frame = self._frames[i]
+        color, depth = self.get_camera_frame(i)
 
         camera_to_world = np.array(frame["transform_matrix"])
 
@@ -133,7 +141,7 @@ class BlenderDataIterator:
             color[..., :3],
             depth,
             camera_to_world,
-            self._intrinsics,
+            self.intrinsics,
             from_opengl=True,
             filter_zero=True,
         )
