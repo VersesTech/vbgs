@@ -15,6 +15,7 @@ train:
   learning_rate: 1.0
   beta: 0.0
   n_iters: 1
+  finetune: false
 dirname: ${experiment_name}/${data.model_name}/nc:${model.n_components}/subs:${data.subsample_factor}_randinit:${model.init_random}
 hydra: 
   job: 

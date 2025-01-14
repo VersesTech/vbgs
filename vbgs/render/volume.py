@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import numpy as np
+from functools import partial
 
 from pathlib import Path
 
@@ -30,15 +31,17 @@ def opengl_to_colmap_frame(cam):
     return cam.at[:3, 1:3].set(cam[:3, 1:3] * -1)
 
 
+@partial(jax.jit, static_argnames=["height", "width", "c", "f"])
 def render_gsplat(
     mu, 
     si, 
     alpha,
     cam_to_world,
-    intrinsics,
+    c,
+    f,
     height,
     width,
-    bg=None,
+    bg=jnp.zeros(3),
     glob_scale=1.0,
     clip_thresh=0.01,
     block_size=16,
@@ -51,7 +54,8 @@ def render_gsplat(
         si: The corresponding covariances of the gaussians. [N, 6, 6]
         alpha: The assignments. [N]
         cam_to_world: A camera pose to render from. [4, 4]
-        intrinsics: Camera intrinsics. [3, 3]
+        c: the intrinsics centerpoint
+        f: the intrinsics focal point
         height: The desired frame height
         width: The desired frame width
         bg: [Optional] The backgroundcolor, will be black if unset.
@@ -59,11 +63,7 @@ def render_gsplat(
     scales, quats = covariance_to_scaling_rotation(si[:, :3, :3])
     colors = mu[:, 3:]
     center_points = mu[:, :3]
-    c = int(intrinsics[0, 2]), int(intrinsics[1, 2])
-    f = float(intrinsics[0, 0]), float(intrinsics[1, 1])
     alpha = alpha[..., None] > 0.01
-    if bg is None:
-        bg = jnp.zeros(3)
     if from_opengl:
         cam_to_world = opengl_to_colmap_frame(cam_to_world)
     
@@ -111,4 +111,4 @@ def covariance_to_scaling_rotation(covariance):
 
     # Convert to quaternion
     wxyz = jax.vmap(rot_mat_to_quat)(rotation)
-    return np.array(scales), np.array(wxyz)
+    return scales, wxyz

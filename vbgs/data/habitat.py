@@ -112,6 +112,9 @@ class HabitatDataIterator:
             self._depth_model = load_depth_model("dav2", device)
 
         self._from_opengl = from_opengl
+        self.intrinsics, *_ = load_camera_params(self._frames[0])
+        self.c = int(self.intrinsics[0, 2]), int(self.intrinsics[1, 2])
+        self.f = float(self.intrinsics[0, 0]), float(self.intrinsics[1, 1])
 
     def _get_frame_rgbd(self, index):
         im = self._frames[index]
@@ -125,9 +128,7 @@ class HabitatDataIterator:
         else:
             depth_path = str(im).replace(".jpeg", "_depth.exr")
             if os.path.exists(depth_path):
-                d = cv2.imread(
-                    depth_path, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH
-                )
+                d = cv2.imread(depth_path, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
             else:
                 d = str(im).replace(".jpeg", "_depth.jpeg")
                 d = cv2.imread(d, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
