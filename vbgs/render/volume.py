@@ -33,8 +33,8 @@ def opengl_to_colmap_frame(cam):
 
 @partial(jax.jit, static_argnames=["height", "width", "c", "f"])
 def render_gsplat(
-    mu, 
-    si, 
+    mu,
+    si,
     alpha,
     cam_to_world,
     c,
@@ -45,7 +45,7 @@ def render_gsplat(
     glob_scale=1.0,
     clip_thresh=0.01,
     block_size=16,
-    from_opengl=True
+    from_opengl=True,
 ):
     """Uses the gsplats rasterization code to render a vbgs splat.
 
@@ -66,7 +66,7 @@ def render_gsplat(
     alpha = alpha[..., None] > 0.01
     if from_opengl:
         cam_to_world = opengl_to_colmap_frame(cam_to_world)
-    
+
     world_to_cam = jnp.linalg.inv(cam_to_world)
     return jsplat.render(
         center_points.astype(jnp.float32),
@@ -95,7 +95,7 @@ def rot_mat_to_quat(m):
     return q
 
 
-def covariance_to_scaling_rotation(covariance):
+def covariance_to_scaling_rotation(covariance, as_quat=True):
     # Decompose into L @ L.T
     mat_L = jax.vmap(jnp.linalg.cholesky)(covariance)
 
@@ -111,4 +111,5 @@ def covariance_to_scaling_rotation(covariance):
 
     # Convert to quaternion
     wxyz = jax.vmap(rot_mat_to_quat)(rotation)
-    return scales, wxyz
+    rot_value = wxyz if as_quat else rotation
+    return scales, rot_value

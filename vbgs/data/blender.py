@@ -37,6 +37,7 @@ class BlenderDataIterator:
         file="transforms_test.json",
         data_params=None,
         subsample=None,
+        key=None,
     ):
         self._data_params = data_params
 
@@ -71,7 +72,7 @@ class BlenderDataIterator:
         self._index = 0
         self._r = self._compute_distance_to_depth(angle_x, shape)
 
-        self.key = jr.PRNGKey(0)
+        self.key = jr.PRNGKey(0) if key is None else key
 
     @staticmethod
     def _compute_distance_to_depth(angle_x, shape):

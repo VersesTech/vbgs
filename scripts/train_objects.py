@@ -39,7 +39,11 @@ from vbgs.model.train import fit_gmm_step
 from vbgs.data.utils import create_normalizing_params, normalize_data
 from vbgs.data.blender import BlenderDataIterator
 from vbgs.model.model import DeltaMixture
-from vbgs.render.volume import render_gsplat
+from vbgs.render.volume import (
+    rot_mat_to_quat,
+    opengl_to_colmap_frame,
+)
+import jaxsplat
 
 from model_volume import get_volume_delta_mixture
 
@@ -60,57 +64,73 @@ def batched(dataloader, bs=64):
         cams, xs = [], []
 
 
-def finetune(model: DeltaMixture, data_params, data_path, subsample, n_iters, key):
+def finetune(params, data_params, data_path, subsample, n_iters, key):
     data_iter = BlenderDataIterator(
         data_path, data_params=data_params, subsample=subsample
     )
-
+    alpha = params[-1]
+    alpha = (alpha[..., None] > 0.01).astype(jnp.float64)
+    mat_lower = jax.vmap(jnp.linalg.cholesky)(params[1][:, :3, :3])
+    scales = jax.vmap(lambda x: jnp.linalg.norm(x, axis=-1))(mat_lower)
+    mat_lower = mat_lower / jnp.expand_dims(scales, -1)
+    params = (params[0], scales, mat_lower, alpha)
     key, subkey = jr.split(key)
-    mu, si, alpha = model.extract_model(data_params)
-    optimizer = optax.adam(1e-3)
-    opt_state = optimizer.init((mu, si, alpha))
+    optimizer = optax.adam(1e-2)
+    opt_state = optimizer.init(params)
 
-    def render(m, s, a, cam):
-        return render_gsplat(
-            m,
-            s,
-            a,
-            cam,
-            data_iter.c,
-            data_iter.f,
-            data_iter.h,
-            data_iter.w,
-            jnp.zeros(3),
+    @jax.jit
+    def render(mu, scale, mat_low, alpha, cam):
+        rotation = jax.vmap(lambda x: x @ x.T)(mat_low)
+        wxyz = jax.vmap(rot_mat_to_quat)(rotation)
+        w2c = jnp.linalg.inv(opengl_to_colmap_frame(cam))
+        return jaxsplat.render(
+            mu[:, :3].astype(jnp.float32),
+            scale.astype(jnp.float32),
+            wxyz.astype(jnp.float32),
+            mu[:, 3:].astype(jnp.float32),
+            alpha.astype(jnp.float32),
+            viewmat=w2c.astype(jnp.float32),
+            background=jnp.zeros(3, dtype=jnp.float32),
+            img_shape=(data_iter.h, data_iter.w),
+            glob_scale=1.0,
+            c=data_iter.c,
+            f=data_iter.f,
+            clip_thresh=0.01,
+            block_size=16,
         )
 
-    def loss(m, s, a, x, cam):
-        x_hat = jax.lax.map(lambda c: render(m, s, a, c), cam)
-        x = jnp.reshape(x[..., :3], (x.shape[0], -1))
-        x_hat = jnp.reshape(x_hat, (x_hat.shape[0], -1))
-        return jnp.sqrt((x - x_hat) ** 2).mean(axis=-1).sum()
+    def loss(mu, scale, mat_low, alpha, x, cam):
+        x_hat = jax.lax.map(lambda c: render(mu, scale, mat_low, alpha, c), cam)
+        return jnp.mean(jnp.square(x_hat - x[..., :3] / 255))
 
-    gradfn = jax.value_and_grad(loss, [0, 1, 2])
+    gradfn = jax.value_and_grad(loss, [0, 1, 2, 3])
+    render_idx = 0
+    data_iter._frames = [data_iter._frames[0]]
     for i in range(n_iters):
+        key, subkey = jr.split(key)
         batchloader = batched(
             BlenderDataIterator(
-                data_path, data_params=data_params, subsample=subsample
+                data_path, data_params=data_params, subsample=subsample, key=subkey
             ),
-            bs=64,
+            bs=12,
         )
         for xs, cams in batchloader:
-            loss, grads = tuple(gradfn(mu, si, alpha, xs, cams))
+            loss, grads = tuple(gradfn(*params, xs, cams))
             updates, opt_state = optimizer.update(grads, opt_state)
-            mu, si, alpha = optax.apply_updates((mu, si, alpha), updates)
-        img_hat = render(mu, si, alpha, cams[0])
-        img_hat = img_hat / jnp.max(img_hat)  # Sometimes the render isn't normalized...
-        img = xs[0][..., :3] / 255
-        fig, axes = plt.subplots(1, 2, figsize=(4, 2))
-        axes[0].imshow(img)
-        axes[1].imshow(img_hat)
-        [a.axis("off") for a in axes.flatten()]
-        plt.savefig(f"output_{i}.png")
-        plt.close()
-        print(loss)
+            params = optax.apply_updates(params, updates)
+    img_hat = render(*params, cams[render_idx])
+    img_hat = img_hat / jnp.max(img_hat)
+    img = xs[render_idx][..., :3] / 255
+    mse = (img_hat - img) ** 2
+    fig, axes = plt.subplots(1, 5, figsize=(12, 4))
+    axes[0].imshow(img)
+    axes[1].imshow(img_hat)
+    axes[2].imshow(mse)
+    [a.axis("off") for i, a in enumerate(axes.flatten())]
+    plt.savefig(f"output_{i}.png")
+    plt.close()
+    print(loss)
+    return params
 
 
 def fit_continual(
@@ -176,8 +196,6 @@ def fit_continual(
     )
 
     model = copy.deepcopy(prior_model)
-
-    # data_iter._frames = data_iter._frames[::40]
     metrics = dict({})
     prior_stats, space_stats, color_stats = None, None, None
     for step, x in tqdm(enumerate(data_iter), total=len(data_iter)):
@@ -197,7 +215,13 @@ def fit_continual(
 
 
 def run_experiment(
-    key, data_path, n_components, subsample, init_random, batch_size, do_finetune
+    key,
+    data_path,
+    n_components,
+    subsample,
+    init_random,
+    batch_size,
+    do_finetune,
 ):
     # Fit continual VBEM
     key, subkey = jr.split(key)
@@ -210,7 +234,8 @@ def run_experiment(
         batch_size=batch_size,
     )
     if do_finetune:
-        finetune(model, data_params, data_path, subsample, 100, key)
+        params = model.extract_model(data_params)
+        finetune(params, data_params, data_path, subsample, 20, key)
     return {}
 
 
