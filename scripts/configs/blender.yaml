@@ -17,7 +17,7 @@ train:
   n_iters: 1
   finetune: true 
   finetune_iters: 30
-  finetune_batch_size: 64,
+  finetune_batch_size: 64
   finetune_log: 10
 dirname: ${experiment_name}/finetune:${train.finetune}/${data.model_name}/nc:${model.n_components}/subs:${data.subsample_factor}_randinit:${model.init_random}
 hydra: 
