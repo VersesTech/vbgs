@@ -60,7 +60,7 @@ def finetune(mu, si, alpha, iterator_fn, n_iters, key, bs=64, log_every=10):
     grad_fn = jax.value_and_grad(loss_fn, [0, 1, 2])
     for i in tqdm(range(n_iters)):
         key, subkey = jr.split(key)
-        batched_iter = batched(iterator_fn(key), bs=bs)
+        batched_iter = Batched(iterator_fn(key), bs=bs)
         losses = []
         test_cam = data_iter.load_camera_params(10)[0]
         test_img = data_iter.get_camera_frame(10)[0][..., :3] / 255
@@ -79,7 +79,7 @@ def finetune(mu, si, alpha, iterator_fn, n_iters, key, bs=64, log_every=10):
             loss, grads = grad_fn(*params, alpha_n, xs / 255, cams)
             losses.append(loss)
             updates, opt_state = optimizer.update(grads, opt_state)
-            params = optax.apply_updates(grads, updates)
+            params = optax.apply_updates(params, updates)
 
         tqdm.write(f"Avg mse train loss: {jnp.mean(jnp.array(losses))}")
         tqdm.write(f"Test image psnr: {calc_psnr(test_img, img_hat)}")
@@ -88,22 +88,6 @@ def finetune(mu, si, alpha, iterator_fn, n_iters, key, bs=64, log_every=10):
         scales[..., None] * jax.vmap(lambda x: x @ x.T)(mat_lower)
     )
     return params[0], si, alpha
-
-
-def batched(dataloader, bs=64):
-    i = 0
-    cams, xs = [], []
-    while i < len(dataloader):
-        for _ in range(bs):
-            if i >= len(dataloader):
-                return jnp.stack(xs), jnp.stack(cams)
-            cams.append(dataloader.load_camera_params(i)[0])
-            xs.append(dataloader.get_camera_frame(i)[0])
-            i += 1
-        cams = jnp.stack(cams)
-        xs = jnp.stack(xs)
-        yield xs, cams
-        cams, xs = [], []
 
 
 class Batched:
