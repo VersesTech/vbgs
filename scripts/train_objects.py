@@ -40,6 +40,7 @@ from vbgs.model.train import fit_gmm_step
 from vbgs.data.utils import create_normalizing_params, normalize_data
 from vbgs.data.blender import BlenderDataIterator
 from vbgs.finetune import finetune
+from vbgs.render.volume import render_gsplat
 
 
 from model_volume import get_volume_delta_mixture
@@ -110,6 +111,7 @@ def fit_continual(
     model = copy.deepcopy(prior_model)
     metrics = dict({})
     prior_stats, space_stats, color_stats = None, None, None
+    data_iter._frames = data_iter._frames[::40]
     for step, x in tqdm(enumerate(data_iter), total=len(data_iter)):
         model, prior_stats, space_stats, color_stats = fit_gmm_step(
             prior_model,

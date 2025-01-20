@@ -39,51 +39,71 @@ def train_render(mu, scale, mat_lower, alpha, camera, h, w, c, f):
 def finetune(mu, si, alpha, iterator_fn, n_iters, key, bs=64, log_every=10):
     key, subkey = jr.split(key)
     data_iter = iterator_fn(subkey)
+
     alpha_n = (alpha[..., None] > 0.01).astype(jnp.float64)
     mat_lower = jax.vmap(jnp.linalg.cholesky)(si[:, :3, :3])
     scales = jax.vmap(lambda x: jnp.linalg.norm(x, axis=-1))(mat_lower)
     mat_lower = mat_lower / jnp.expand_dims(scales, -1)
     params = (mu, scales, mat_lower)
+
     key, subkey = jr.split(key)
-    optimizer = optax.adam(1e-2)
+    optimizer = optax.adam(1e-4)
     opt_state = optimizer.init(params)
 
-    render_fn = partial(
-        train_render, h=data_iter.h, w=data_iter.w, c=data_iter.c, f=data_iter.f
-    )
+    h, w, c, f = data_iter.h, data_iter.w, data_iter.c, data_iter.f
+    render_fn = partial(train_render, h=h, w=w, c=c, f=f)
 
     def loss_fn(mean, scale, mat_low, alpha, x, cam):
         x_hat = jax.lax.map(lambda c: render_fn(mean, scale, mat_low, alpha, c), cam)
-        return jnp.mean(jnp.square(x_hat - x[..., :3] / 255))
+        return jnp.mean(jnp.square(x_hat - x[..., :3]))
 
-    grad_fn = jax.value_and_grad(loss_fn, [0, 1, 2, 3])
+    grad_fn = jax.value_and_grad(loss_fn, [0, 1, 2])
     for i in tqdm(range(n_iters)):
         key, subkey = jr.split(key)
-        batched_iter = Batched(iterator_fn(key), bs=bs)
+        batched_iter = batched(iterator_fn(key), bs=bs)
         losses = []
-
-        for xs, cams in tqdm(batched_iter, leave=False, total=len(batched_iter)):
-            loss, grads = grad_fn(*params, alpha_n, xs, cams)
-            losses.append(loss)
-            updates, opt_state = optimizer.update(grads, opt_state)
-            params = optax.apply_updates(grads, updates)
-
+        test_cam = data_iter.load_camera_params(10)[0]
+        test_img = data_iter.get_camera_frame(10)[0][..., :3] / 255
         if i % log_every == 0:
-            img_hat = jnp.clip(render_fn(*params, alpha_n, cams[0]), min=0.0, max=1.0)
-            img = xs[0][..., :3] / 255
-            se = jnp.square(img_hat - img)
+            img_hat = jnp.clip(render_fn(*params, alpha_n, test_cam), min=0.0, max=1.0)
+            se = jnp.square(img_hat - test_img)
             _, axes = plt.subplots(1, 3, figsize=(9, 3))
-            axes[0].imshow(img)
+            axes[0].imshow(test_img)
             axes[1].imshow(img_hat)
             axes[2].imshow(se)
             [a.axis("off") for a in axes.flatten()]
             plt.savefig(f"output_{i}.png")
             plt.close()
-            tqdm.write(f"Avg mse train loss: {jnp.mean(jnp.array(losses))}")
-            tqdm.write(f"Test image psnr: {calc_psnr(img, img_hat)}")
 
-    si = si.at[:, :3, :3].set(scales * jnp.vmap(lambda x: x @ x.T)(mat_lower))
+        for xs, cams in tqdm(batched_iter, leave=False, total=len(data_iter) // bs):
+            loss, grads = grad_fn(*params, alpha_n, xs / 255, cams)
+            losses.append(loss)
+            updates, opt_state = optimizer.update(grads, opt_state)
+            params = optax.apply_updates(grads, updates)
+
+        tqdm.write(f"Avg mse train loss: {jnp.mean(jnp.array(losses))}")
+        tqdm.write(f"Test image psnr: {calc_psnr(test_img, img_hat)}")
+
+    si = si.at[:, :3, :3].set(
+        scales[..., None] * jax.vmap(lambda x: x @ x.T)(mat_lower)
+    )
     return params[0], si, alpha
+
+
+def batched(dataloader, bs=64):
+    i = 0
+    cams, xs = [], []
+    while i < len(dataloader):
+        for _ in range(bs):
+            if i >= len(dataloader):
+                return jnp.stack(xs), jnp.stack(cams)
+            cams.append(dataloader.load_camera_params(i)[0])
+            xs.append(dataloader.get_camera_frame(i)[0])
+            i += 1
+        cams = jnp.stack(cams)
+        xs = jnp.stack(xs)
+        yield xs, cams
+        cams, xs = [], []
 
 
 class Batched:
@@ -100,18 +120,17 @@ class Batched:
 
     def __next__(self):
         cams, xs = [], []
-        while i < len(self.inner_loader):
-            for _ in range(self.bs):
+        for _ in range(self.bs):
+            if self.i >= len(self.inner_loader):
+                self.i = 0
+                raise StopIteration
 
-                if i >= len(self.inner_loader):
-                    raise StopIteration
-
-                cams.append(self.inner_loader.load_camera_params(i)[0])
-                xs.append(self.inner_loader.get_camera_frame(i)[0])
-                i += 1
-            cams = jnp.stack(cams)
-            xs = jnp.stack(xs)
-            return xs, cams
+            cams.append(self.inner_loader.load_camera_params(self.i)[0])
+            xs.append(self.inner_loader.get_camera_frame(self.i)[0])
+            self.i += 1
+        cams = jnp.stack(cams)
+        xs = jnp.stack(xs)
+        return xs, cams
 
     def __iter__(self):
         return self
