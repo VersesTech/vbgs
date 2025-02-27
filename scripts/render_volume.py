@@ -45,7 +45,7 @@ def show_blender():
         )
     # Load the trained model.
     splat_path = (
-        "data/blender-dataset/lego/nc:10000/subs:None_randinit:True/model_199.npz"
+        "data/blender-dataset/lego/nc:10000/subs:None_randinit:True/model_199.json"
     )
     i = 0
     splat = Splat(*load_model(root_path / splat_path))

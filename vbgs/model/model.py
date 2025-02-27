@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from functools import partial
+from collections import namedtuple
 
 import equinox
 
@@ -24,6 +25,8 @@ from vbgs.vi.conjugate.mvn import MultivariateNormal
 from vbgs.vi.models.mixture import Mixture
 
 from vbgs.model.utils import transform_mvn
+
+Splat = namedtuple("Splat", ["mu", "si", "alpha"])
 
 
 class DeltaMixture(equinox.Module):
@@ -86,11 +89,14 @@ class DeltaMixture(equinox.Module):
         )(mu, si)
 
         if clip_val is not None:
-            si_diag = jnp.diagonal(si, axis1=1, axis2=2).clip(
-                clip_val, jnp.inf
-            )
+            si_diag = jnp.diagonal(si, axis1=1, axis2=2).clip(clip_val, jnp.inf)
             si = jax.vmap(lambda x, y: jnp.fill_diagonal(x, y, inplace=False))(
                 si, si_diag
             )
 
         return mu, si
+
+    def extract_model(self, data_params):
+        mu, si = self.denormalize(data_params, clip_val=None)
+        alpha = self.prior.alpha.reshape(-1)
+        return Splat(mu, si, alpha)
