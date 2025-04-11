@@ -27,6 +27,8 @@ from vbgs.model.model import Splat
 from vbgs.data.blender import BlenderDataIterator
 from vbgs.render.volume import render_gsplat
 
+import numpy as np
+
 from vbgs.data.habitat import HabitatDataIterator
 
 
@@ -44,9 +46,7 @@ def show_blender():
             [x["transform_matrix"] for x in transforms_val["frames"]]
         )
     # Load the trained model.
-    splat_path = (
-        "data/blender-dataset/lego/nc:10000/subs:None_randinit:True/model_199.json"
-    )
+    splat_path = "data/blender-dataset/lego/nc:10000/subs:None_randinit:True/model_199.json"
     i = 0
     splat = Splat(*load_model(root_path / splat_path))
 
@@ -61,7 +61,9 @@ def show_blender():
         clip_thresh=1e-4,
     )
 
-    x = Image.open(str(blender_data_path / data_iter._frames[i]["file_path"]) + ".png")
+    x = Image.open(
+        str(blender_data_path / data_iter._frames[i]["file_path"]) + ".png"
+    )
 
     fig, ax = plt.subplots(1, 2, figsize=(8, 4))
     ax[0].imshow(x)
@@ -92,12 +94,14 @@ def show_habitat():
     splat = Splat(*load_model(root_path / splat_path))
 
     i = 0
-    intrinsics, cam_to_world = data_iter.get_camera_params(i)
+    intrinsics, cam_to_world = data_iter.get_camera_params(i)[:2]
     # TODO check this with a working habitat model
     c = int(intrinsics[0, 2]), int(intrinsics[1, 2])
     f = float(intrinsics[0, 0]), float(intrinsics[1, 1])
-    x_hat = render_gsplat(*splat, cam_to_world, c, f, 800, 800)
-    x = Image.open(data_iter._frames[i])
+
+    x = np.array(Image.open(data_iter._frames[i]))
+
+    x_hat = render_gsplat(*splat, cam_to_world, c, f, x.shape[0], x.shape[1])
 
     fig, ax = plt.subplots(1, 2, figsize=(8, 4))
     ax[0].imshow(x)
@@ -112,5 +116,5 @@ def show_habitat():
 
 
 if __name__ == "__main__":
-    show_blender()
+    # show_blender()
     show_habitat()
