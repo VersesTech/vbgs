@@ -19,6 +19,13 @@ import jax.random as jr
 import jax.numpy as jnp
 
 
+def load_model(filename):
+    with open(filename, "r") as f:
+        data = json.load(f)
+        params = data["mu"], data["si"], data["alpha"]
+    return [jnp.array(p) for p in params]
+
+
 def store_model(model, data_params, filename):
     mu, si = model.denormalize(data_params, clip_val=None)
     alpha = model.prior.alpha.reshape(-1)
