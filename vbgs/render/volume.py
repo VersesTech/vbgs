@@ -72,21 +72,20 @@ def rot_mat_to_quat(m):
 
 
 def covariance_to_scaling_rotation(covariance):
-    # Decompose into L @ L.T
-    mat_L = jax.vmap(jnp.linalg.cholesky)(covariance)
+    """Unpack NIW spatial covariance into 3DGS scales and quaternions.
 
-    # Decompose into R @ S
-    scales = jax.vmap(lambda x: jnp.linalg.norm(x, axis=-1))(mat_L)
-
-    # Rotation is basically the normalized matrix left over
-    rotation = mat_L / jnp.expand_dims(scales, -1)
-
-    rec = jax.vmap(lambda r, s: jnp.dot(r, jnp.dot(s, jnp.dot(s.T, r.T))))
-    scale_mat = jnp.eye(3).reshape((1, 3, 3)) * scales.reshape(-1, 3, 1)
-    res = rec(rotation, scale_mat)
-
-    # Convert to quaternion
-    wxyz = jax.vmap(rot_mat_to_quat)(rotation)
+    3DGS expects Sigma = R diag(s^2) R^T. The previous Cholesky path treated a
+    row-normalized L as R, which is incorrect for non-axis-aligned Gaussians.
+    Use the symmetric eigenframe instead: s = sqrt(lambda), R = V (det +1).
+    """
+    cov = 0.5 * (covariance + jnp.swapaxes(covariance, -1, -2))
+    eigenvalues, eigenvectors = jnp.linalg.eigh(cov)
+    scales = jnp.sqrt(jnp.clip(eigenvalues, 1e-18, None))
+    # Ensure a proper rotation (det = +1), not a reflection.
+    det = jnp.linalg.det(eigenvectors)
+    sign = jnp.where(det < 0.0, -1.0, 1.0)
+    eigenvectors = eigenvectors.at[:, :, 0].multiply(sign[:, None])
+    wxyz = jax.vmap(rot_mat_to_quat)(eigenvectors)
     return np.array(scales), np.array(wxyz)
 
 
